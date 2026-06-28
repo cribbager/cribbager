@@ -1,0 +1,50 @@
+# Local full stack: Postgres + the server with persistence enabled.
+#
+#   docker compose up --build      # app on http://localhost:8080, games persisted
+#
+# For day-to-day dev you can instead run just the database and the app natively:
+#
+#   docker compose up -d db
+#   DATABASE_URL=postgres://cribbager:cribbager@localhost:5432/cribbager?sslmode=disable \
+#     go run ./cmd/cribbager-server
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cribbager
+      POSTGRES_PASSWORD: cribbager
+      POSTGRES_DB: cribbager
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cribbager"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Mailpit catches outgoing mail locally: it accepts SMTP on 1025 (no auth) and
+  # serves a web UI on http://localhost:8025 where password-reset emails show up.
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://cribbager:cribbager@db:5432/cribbager?sslmode=disable
+      # Send password-reset email to Mailpit (caught at http://localhost:8025).
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: cribbager@localhost
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

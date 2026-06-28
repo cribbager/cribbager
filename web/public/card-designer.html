@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:," /><!-- suppress the /favicon.ico request (a stray 404) -->
+<link rel="stylesheet" href="/src/ui/cardFace.css" />
+<title>Cribbager — Card Designer</title>
+<style>
+  :root { --felt: #efe4cb; --ink: #2c2418; --line: #d8cdb4; --muted: #6b5d44; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--felt); color: var(--ink);
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 1.1rem; margin: 0 0 4px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; max-width: 64ch; line-height: 1.5; }
+  header code { background: rgba(0,0,0,0.05); padding: 1px 4px; border-radius: 4px; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; gap: 0; }
+  .controls { padding: 1.25rem; border-right: 1px solid var(--line); }
+  .controls h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 1.25rem 0 0.6rem; }
+  .controls h2:first-child { margin-top: 0; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
+  .row label { flex: 1; }
+  .row input[type=range] { width: 96px; }
+  .row .val { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+  .row input[type=color] { width: 36px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+  .btn { font: inherit; font-size: 13px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer; }
+  .btn + .btn { margin-left: 6px; }
+  main { padding: 1.5rem; }
+  main h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.85rem; }
+  main h2.second { margin-top: 1.75rem; }
+  #deck { display: grid; grid-template-columns: repeat(13, var(--card-w, 70px)); gap: 10px; width: max-content; }
+  #stack { display: flex; }
+  #stack .card:not(:first-child) { margin-left: calc(var(--card-w, 70px) * -0.4); } /* overlap as during pegging */
+  .out { margin-top: 1rem; }
+  .out textarea { width: 100%; height: 84px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+                  border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fff; color: var(--ink); resize: vertical; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Card Designer</h1>
+  <p>The game's actual card, drawn through the shared <code>cardFace.js</code> /
+     <code>cardFace.css</code>. Tweak the CSS variables below to preview changes live;
+     to make them the game's, copy the values into <code>cardFace.css</code>'s fallbacks
+     (or the game palette). The stack is the real test — overlapping during pegging,
+     where the corner index alone must identify each card.</p>
+</header>
+
+<div class="layout">
+  <aside class="controls">
+    <h2>Size &amp; shape</h2>
+    <div id="size"></div>
+    <h2>Colours</h2>
+    <div id="colour"></div>
+    <h2>Apply</h2>
+    <button class="btn" id="reset">Reset</button>
+    <button class="btn" id="copy">Copy CSS</button>
+    <div class="out"><textarea id="css" readonly></textarea></div>
+  </aside>
+
+  <main>
+    <h2>Full deck</h2>
+    <div id="deck"></div>
+    <h2 class="second">Overlapping pegging stack + a face-down back</h2>
+    <div id="stack"></div>
+  </main>
+</div>
+
+<script type="module">
+  import { cardFace } from '/src/ui/cardFace.js';
+
+  // Render the real cards (suit order matches the engine: 0=C, 1=D, 2=H, 3=S).
+  const deck = document.getElementById('deck');
+  for (let suit = 0; suit < 4; suit++)
+    for (let rank = 1; rank <= 13; rank++) deck.append(cardFace({ rank, suit }));
+  const stack = document.getElementById('stack');
+  for (const c of [{ rank: 7, suit: 2 }, { rank: 8, suit: 0 }, { rank: 9, suit: 1 }, { rank: 10, suit: 3 }])
+    stack.append(cardFace(c));
+  stack.append(cardFace(null, { faceDown: true }));
+
+  // Each control is a cardFace.css variable. The defaults match cardFace.css's
+  // fallbacks (= the current game card). Overrides are set on the document root.
+  const SIZE = [
+    { v: '--card-w', label: 'Card width', min: 50, max: 120, def: 70 },
+    { v: '--card-h', label: 'Card height', min: 70, max: 168, def: 98 },
+    { v: '--card-radius', label: 'Corner radius', min: 0, max: 24, def: 10 },
+    { v: '--card-rank-size', label: 'Corner rank', min: 10, max: 28, def: 18 },
+    { v: '--card-suit-size', label: 'Corner suit', min: 8, max: 24, def: 14 },
+    { v: '--card-pip-size', label: 'Centre pip', min: 16, max: 48, def: 32 },
+  ];
+  const COLOUR = [
+    { v: '--card-red', label: 'Red suits', def: '#c0392b' },
+    { v: '--ink', label: 'Black suits', def: '#2c2418' },
+  ];
+  const root = document.documentElement.style;
+  const setVar = (v, val) => root.setProperty(v, val);
+
+  function buildRange(c, host) {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<label>${c.label}</label><input type="range" min="${c.min}" max="${c.max}" value="${c.def}"><span class="val">${c.def}px</span>`;
+    const input = row.querySelector('input'), val = row.querySelector('.val');
+    input.addEventListener('input', () => { val.textContent = input.value + 'px'; setVar(c.v, input.value + 'px'); emit(); });
+    host.append(row); c._input = input; c._val = val;
+  }
+  function buildColour(c, host) {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<label>${c.label}</label><input type="color" value="${c.def}">`;
+    const input = row.querySelector('input');
+    input.addEventListener('input', () => { setVar(c.v, input.value); emit(); });
+    host.append(row); c._input = input;
+  }
+
+  SIZE.forEach((c) => buildRange(c, document.getElementById('size')));
+  COLOUR.forEach((c) => buildColour(c, document.getElementById('colour')));
+
+  // Apply all current values (so the override root + the copy output stay in sync).
+  function applyAll() {
+    SIZE.forEach((c) => setVar(c.v, c._input.value + 'px'));
+    COLOUR.forEach((c) => setVar(c.v, c._input.value));
+  }
+  function emit() {
+    const lines = [
+      ...SIZE.map((c) => `  ${c.v}: ${c._input.value}px;`),
+      ...COLOUR.map((c) => `  ${c.v}: ${c._input.value};`),
+    ];
+    document.getElementById('css').value = `:root {\n${lines.join('\n')}\n}`;
+  }
+
+  document.getElementById('reset').addEventListener('click', () => {
+    SIZE.forEach((c) => { c._input.value = c.def; c._val.textContent = c.def + 'px'; });
+    COLOUR.forEach((c) => { c._input.value = c.def; });
+    applyAll(); emit();
+  });
+  document.getElementById('copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(document.getElementById('css').value); } catch {}
+  });
+
+  applyAll(); emit();
+</script>
+</body>
+</html>

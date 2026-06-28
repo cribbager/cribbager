@@ -1,0 +1,103 @@
+[
+  {
+    "name": "fifteen for two",
+    "series": ["9H"],
+    "card": "6C",
+    "count": 15,
+    "total": 2,
+    "points": {"fifteen": 2, "thirtyOne": 0, "pair": 0, "run": 0}
+  },
+  {
+    "name": "thirty-one for two",
+    "series": ["KH", "KC", "TD"],
+    "card": "AS",
+    "count": 31,
+    "total": 2,
+    "points": {"fifteen": 0, "thirtyOne": 2, "pair": 0, "run": 0}
+  },
+  {
+    "name": "pair for two",
+    "series": ["5H"],
+    "card": "5C",
+    "count": 10,
+    "total": 2,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 2, "run": 0}
+  },
+  {
+    "name": "pair royal for six",
+    "series": ["KH", "KC"],
+    "card": "KD",
+    "count": 30,
+    "total": 6,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 6, "run": 0}
+  },
+  {
+    "name": "double pair royal for twelve",
+    "series": ["7H", "7C", "7D"],
+    "card": "7S",
+    "count": 28,
+    "total": 12,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 12, "run": 0}
+  },
+  {
+    "name": "run of three played in order",
+    "series": ["AH", "2C"],
+    "card": "3D",
+    "count": 6,
+    "total": 3,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 0, "run": 3},
+    "runLength": 3
+  },
+  {
+    "name": "run of three played out of order",
+    "series": ["3H", "4C"],
+    "card": "2D",
+    "count": 9,
+    "total": 3,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 0, "run": 3},
+    "runLength": 3
+  },
+  {
+    "name": "a duplicate earlier in the pile does not break the recent run",
+    "series": ["6H", "7C", "8D"],
+    "card": "6S",
+    "count": 27,
+    "total": 3,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 0, "run": 3},
+    "runLength": 3
+  },
+  {
+    "name": "run broken by a duplicate scores nothing",
+    "series": ["6H", "7C"],
+    "card": "6S",
+    "count": 19,
+    "total": 0,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 0, "run": 0}
+  },
+  {
+    "name": "run of four out of order",
+    "series": ["5H", "6C", "7D"],
+    "card": "4S",
+    "count": 22,
+    "total": 4,
+    "points": {"fifteen": 0, "thirtyOne": 0, "pair": 0, "run": 4},
+    "runLength": 4
+  },
+  {
+    "name": "fifteen and a run of three together",
+    "series": ["4H", "5C"],
+    "card": "6D",
+    "count": 15,
+    "total": 5,
+    "points": {"fifteen": 2, "thirtyOne": 0, "pair": 0, "run": 3},
+    "runLength": 3
+  },
+  {
+    "name": "thirty-one and a pair together",
+    "series": ["9H", "6C", "8D"],
+    "card": "8S",
+    "count": 31,
+    "total": 4,
+    "points": {"fifteen": 0, "thirtyOne": 2, "pair": 2, "run": 0}
+  }
+]

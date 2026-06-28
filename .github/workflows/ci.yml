@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: the workflow only reads the repo. The deploy job authenticates
+# to fly via FLY_API_TOKEN, not GITHUB_TOKEN.
+permissions:
+  contents: read
+
+# Cancel superseded runs on a PR branch; never cancel a main run (cancel-in-progress
+# is false for push events, so a deploy in flight is not interrupted — and the deploy
+# job additionally serializes via its own group below).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cribbager
+          POSTGRES_PASSWORD: cribbager
+          POSTGRES_DB: cribbager
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cribbager"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      # Enables the gated Postgres integration tests; without it they self-skip.
+      TEST_DATABASE_URL: postgres://cribbager:cribbager@localhost:5432/cribbager?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Gofmt
+        run: |
+          fmt=$(gofmt -l .)
+          if [ -n "$fmt" ]; then echo "Unformatted files:"; echo "$fmt"; exit 1; fi
+      # PRs run the fast suite (-short skips the ~13M-iteration exhaustive scoring
+      # proofs but still runs the Postgres integration tests); the post-merge run on
+      # main runs the full proof as the deploy gate.
+      - name: Test (PR — fast)
+        if: github.event_name == 'pull_request'
+        run: go test -short ./...
+      - name: Test (main — full, incl. exhaustive proofs)
+        if: github.event_name == 'push'
+        run: go test ./...
+      - name: Race (server)
+        run: go test -race ./internal/server/
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
+        with:
+          version: v2.12.2
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web deps
+        run: npm ci --prefix web
+      # The web client has no build; unit tests are plain `node --test`.
+      - name: Web unit tests
+        run: npm --prefix web test
+      - name: Lint (eslint)
+        run: npm --prefix web run lint
+
+  # Full-game integration smoke tests: boot the server and drive a complete bot game
+  # and a human-vs-human game in headless Chrome — the real server↔client SSE path.
+  # Non-blocking for now (continue-on-error) to gauge CI stability before making it a
+  # required gate; the deploy does not wait on it.
+  smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - id: chrome
+        uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
+      - name: Install web deps
+        run: npm ci --prefix web
+      - name: Boot server (in-memory)
+        run: |
+          go build -o /tmp/cribbager ./cmd/cribbager-server
+          nohup /tmp/cribbager > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/healthz >/dev/null && exit 0; sleep 1; done
+          echo "server did not come up"; cat /tmp/server.log; exit 1
+      - name: Bot playthrough
+        run: SMOKE_URL=http://localhost:8080/ CHROME='${{ steps.chrome.outputs.chrome-path }}' npm --prefix web run playthrough
+      - name: Human-vs-human playthrough
+        run: SMOKE_URL=http://localhost:8080/ CHROME='${{ steps.chrome.outputs.chrome-path }}' npm --prefix web run playthrough-mp
+
+  # Did this push touch files that affect the deployed app? Used to skip the deploy
+  # (a disruptive single-machine restart) for docs/CI-only merges.
+  changes:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'cmd/**'
+              - 'internal/**'
+              - 'web/public/**'
+              - 'Dockerfile'
+              - 'fly.toml'
+              - 'go.mod'
+              - 'go.sum'
+
+  # Continuous deployment: on a push to main (a merged PR) that changed app files,
+  # once the test jobs pass, deploy to fly.io. Never runs on pull requests, and skips
+  # docs/CI-only merges. --ha=false keeps the single stateful machine our in-memory/SSE
+  # design requires; a deploy briefly restarts it and in-progress games reload from PG.
+  deploy:
+    needs: [go, web, lint, changes]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    concurrency: deploy-production
+    steps:
+      - uses: actions/checkout@v7
+      # Pinned to a commit SHA (was @master): this action runs in the privileged job
+      # that holds FLY_API_TOKEN, so it must not track a moving branch. Dependabot
+      # keeps the pin current.
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1 (master @ 2026-06)
+      - name: Deploy
+        run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # Post-deploy smoke check: confirm the release actually serves and can reach
+      # Postgres (/readyz pings the DB). A broken deploy fails loudly here instead of
+      # silently going live. Retries give the restarted machine time to come up.
+      # Uses the fly-internal URL on purpose: this gates the deploy, so it shouldn't
+      # depend on the public domain's DNS/cert (cribbager.org) being healthy.
+      - name: Smoke check
+        run: |
+          for path in /healthz /readyz /; do
+            curl --fail --silent --show-error --retry 8 --retry-delay 5 --retry-all-errors \
+              "https://cribbager.fly.dev$path" > /dev/null && echo "ok: $path"
+          done

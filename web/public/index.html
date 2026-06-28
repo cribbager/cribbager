@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Cribbager</title>
+    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <!-- The homepage is a light page (no game engine): start a game, join one, or
+         resume one in progress. Each game lives on its own /game.html?game=<id> URL. -->
+    <div id="home"></div>
+    <script type="module" src="/src/ui/home.js"></script>
+  </body>
+</html>

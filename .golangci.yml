@@ -1,0 +1,32 @@
+version: "2"
+
+# Conservative: the default high-value linters (errcheck, govet, staticcheck,
+# ineffassign, unused), tuned to flag real problems without style bikeshedding.
+linters:
+  settings:
+    errcheck:
+      # Don't flag the conventional fire-and-forget calls — HTTP response writes,
+      # Close on defer, discard copies. Genuine unchecked errors still surface.
+      exclude-functions:
+        - (net/http.ResponseWriter).Write
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+    staticcheck:
+      # Keep the SA* bug checks; drop the QF* "quickfix" style nudges.
+      checks:
+        - all
+        - -QF1002
+        - -QF1012
+  exclusions:
+    paths:
+      # A stray vendored .go file ships inside an npm dependency (eslint's tree);
+      # never our code to lint.
+      - node_modules
+    rules:
+      # Tests do plenty of conventional unchecked Close/Write — not worth the noise.
+      - path: _test\.go
+        linters: [errcheck]
+      # Intentional: two independent run() calls compared for (non)determinism.
+      - path: internal/bot/bot_test\.go
+        text: SA4000
+        linters: [staticcheck]

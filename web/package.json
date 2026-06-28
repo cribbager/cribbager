@@ -1,0 +1,20 @@
+{
+  "name": "cribbager-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "Test tooling for the Cribbager web client. The client (web/public/) has no dependencies and no build step; this exists only to run the headless browser tests.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "lint": "eslint .",
+    "playthrough": "node scripts/smoke-playthrough.mjs",
+    "playthrough-mp": "node scripts/smoke-multiplayer.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "puppeteer-core": "^25.2.1"
+  }
+}

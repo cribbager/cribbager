@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Reset password — Cribbager</title>
+    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <!-- Standalone password-reset page. It reads ?token=<id> from the URL and posts
+         a new password to /auth/password/reset; no game engine is loaded. -->
+    <div id="reset"></div>
+    <script type="module" src="/src/ui/reset.js"></script>
+  </body>
+</html>

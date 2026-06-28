@@ -1,0 +1,18 @@
+node_modules/
+.claude/settings.local.json
+/bin/
+
+# go build outputs dropped in the repo root
+/cribbager
+/cribbager-server
+
+# misc
+*.log
+.DS_Store
+
+# local secrets (e.g. DATABASE_URL) — never commit
+.env
+.env.*
+
+# research notes kept locally for now, not published (revisit how to handle these)
+docs/research/

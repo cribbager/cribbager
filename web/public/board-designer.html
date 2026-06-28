@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><!-- suppress the /favicon.ico request (a stray 404) -->
+  <title>Cribbage Board Designer &amp; Tester</title>
+  <style>
+    :root { --ink: #1c1c1c; --muted: #666; --line: #e3e3e3; --bg: #fafaf8; }
+    * { box-sizing: border-box; }
+    body { font: 14px/1.5 system-ui, sans-serif; color: var(--ink); margin: 0; background: var(--bg); }
+    header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--line); }
+    header h1 { font-size: 1.1rem; margin: 0; }
+    header p { margin: .25rem 0 0; color: var(--muted); }
+
+    main { padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+    /* Board column (left, takes remaining width) + tester panel (right).
+       The customize panel lives under the board, so it's only as wide as it. */
+    .top { display: flex; gap: 1.25rem; align-items: start; }
+    .board-col { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1.25rem; }
+    #preview { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 1rem; }
+    .panel { flex: 0 0 300px; display: flex; flex-direction: column; gap: 1rem; }
+    @media (max-width: 860px) { .top { flex-direction: column; } .panel { flex-basis: auto; width: 100%; } }
+    .chk { display: flex; align-items: center; gap: .4rem; margin-top: .5rem; font-size: .85rem; }
+    .chk input[type=checkbox] { margin: 0; }
+    #animspeed { width: 60px; font: inherit; padding: .15rem .3rem; border: 1px solid #bbb; border-radius: 5px; }
+
+    fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .8rem .8rem; margin: 0; }
+    legend { font-weight: 600; padding: 0 .3rem; color: var(--muted); }
+    select { font: inherit; padding: .3rem .4rem; border: 1px solid #bbb; border-radius: 6px; background: #fff; }
+    .panel #board select { width: 100%; }
+
+    .pegrow { display: flex; align-items: center; gap: .4rem; margin: .3rem 0; flex-wrap: wrap; }
+    .pegrow .who { min-width: 58px; font-size: .85rem; }
+    .pegrow input { font: inherit; width: 52px; padding: .2rem .3rem; border: 1px solid #bbb; border-radius: 5px; }
+
+    button { font: inherit; padding: .35rem .65rem; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; }
+    button:hover { background: #f0f0f0; }
+    button.primary { border-color: #888; background: #f3f3f1; margin-top: .4rem; }
+    .msg { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+    .msg.err { color: #b3261e; }
+    .reported { background: #fff; }
+    #scores { font-size: .88rem; color: var(--ink); }
+    #scores code { background: #f0f0ee; padding: .05rem .35rem; border-radius: 4px; font-variant-numeric: tabular-nums; }
+
+    /* Collapsible customization. */
+    details.custom { border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    details.custom > summary { padding: .65rem .85rem; font-weight: 600; cursor: pointer; }
+    details.custom > summary::marker { color: var(--muted); }
+    .custom-body { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: .2rem .85rem .9rem; }
+    .custom-body .out, .custom-body .actions { grid-column: 1 / -1; }
+    @media (max-width: 760px) { .custom-body { grid-template-columns: 1fr; } }
+
+    .row { display: grid; grid-template-columns: 1fr 96px 42px; gap: .4rem; align-items: center; margin: .25rem 0; }
+    .row label { font-size: .85rem; }
+    .row input[type=range] { width: 100%; }
+    .row output { font-variant-numeric: tabular-nums; text-align: right; color: var(--muted); }
+    .crow { display: grid; grid-template-columns: 1fr 36px; gap: .4rem; align-items: center; margin: .25rem 0; }
+    .crow input[type=color] { width: 36px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+
+    .out h3 { font-size: .9rem; margin: 0 0 .35rem; display: flex; justify-content: space-between; align-items: center; }
+    .out h3 button { padding: .15rem .5rem; font-size: .8rem; }
+    pre { background: #1e1e22; color: #e8e8e8; padding: .7rem .8rem; border-radius: 6px; overflow-x: auto; font-size: 12px; margin: 0 0 .9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cribbage Board Designer &amp; Tester</h1>
+    <p>Drive the board with pegs and scores, or expand the customization panel to tweak geometry and colours and copy the config back into <code>theme.js</code> / your CSS.</p>
+  </header>
+
+  <main>
+    <div class="top">
+      <div class="board-col">
+        <div id="preview"></div>
+
+        <details class="custom">
+          <summary>Customize appearance &amp; geometry</summary>
+          <div class="custom-body">
+            <fieldset id="dims"><legend>Geometry</legend></fieldset>
+            <fieldset id="cols"><legend>Colours</legend></fieldset>
+            <div class="out">
+              <h3><span id="jslabel">geometry</span> <button data-copy="js">Copy</button></h3>
+              <pre id="jsout"></pre>
+              <h3>CSS variables <button data-copy="css">Copy</button></h3>
+              <pre id="cssout"></pre>
+            </div>
+            <div class="actions"><button id="reset">Reset to default</button></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="panel">
+        <fieldset id="board"><legend>Board</legend>
+          <select id="layout">
+            <option value="classic">Classic (continuous track)</option>
+            <option value="straight">Straight (long board)</option>
+          </select>
+          <label class="chk"><input type="checkbox" id="interactive"> Drag back peg to score</label>
+          <label class="chk">Count speed <input id="animspeed" type="text" inputmode="numeric" autocomplete="off" value="50"> ms/hole</label>
+        </fieldset>
+
+        <fieldset><legend>Set pegs</legend>
+          <div class="pegrow">
+            <span class="who">Player 1</span>
+            back <input id="p0b" type="text" inputmode="numeric" autocomplete="off">
+            front <input id="p0f" type="text" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="pegrow">
+            <span class="who">Player 2</span>
+            back <input id="p1b" type="text" inputmode="numeric" autocomplete="off">
+            front <input id="p1f" type="text" inputmode="numeric" autocomplete="off">
+          </div>
+          <button id="setpegs" class="primary">Set board</button>
+          <span id="pegmsg" class="msg"></span>
+        </fieldset>
+
+        <fieldset><legend>Apply score</legend>
+          <div class="pegrow">
+            <span class="who">Player</span>
+            <select id="sp"><option value="0">1</option><option value="1">2</option></select>
+            scored <input id="spts" type="text" inputmode="numeric" autocomplete="off" value="0">
+            points
+          </div>
+          <button id="applyscore" class="primary">Apply</button>
+          <span id="scoremsg" class="msg"></span>
+        </fieldset>
+
+        <fieldset class="reported"><legend>Reported scores</legend>
+          <div id="scores"></div>
+        </fieldset>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { createBoard, straightBoard, classicBoard, isLegalScore } from './src/board/board.js';
+
+    const LAYOUTS = {
+      classic: {
+        base: classicBoard, geomKey: 'classic',
+        geometry: { layout: 'classic', startPair: false, colorByTrack: false, trackBorder: true },
+        params: [
+          { key: 'laneGap',    label: 'Lane gap (height)', min: 36, max: 80, step: 1 },
+          { key: 'trackGap',   label: 'Track width',       min: 8,  max: 22, step: 1 },
+          { key: 'spacing',    label: 'Hole pitch',        min: 6,  max: 16, step: 1 },
+          // rightArc / leftArc are fixed (groups of 5) — exposing them would break the 121-hole count.
+          { key: 'holeRadius', label: 'Hole radius',       min: 1.5, max: 5, step: 0.1 },
+          { key: 'pegRadius',  label: 'Peg radius',        min: 2,  max: 6,  step: 0.1 },
+          { key: 'edge',       label: 'Edge inset',        min: 8,  max: 40, step: 1 },
+          { key: 'bodyMargin', label: 'Outer frame',       min: 0,  max: 24, step: 1 },
+          { key: 'bodyRadius', label: 'Corner radius',     min: 0,  max: 40, step: 1 },
+        ],
+      },
+      straight: {
+        base: straightBoard, geomKey: 'straight',
+        geometry: { layout: 'straight', startPair: true },
+        params: [
+          { key: 'spacing',    label: 'Hole pitch (in group)', min: 4,  max: 18, step: 1 },
+          { key: 'groupGap',   label: 'Group gap (extra)',     min: 0,  max: 24, step: 1 },
+          { key: 'rowGap',     label: 'Row gap (per player)',  min: 6,  max: 40, step: 1 },
+          { key: 'playerGap',  label: 'Player gap (centre)',   min: 10, max: 80, step: 1 },
+          { key: 'edge',       label: 'Edge inset',            min: 4,  max: 48, step: 1 },
+          { key: 'bodyMargin', label: 'Outer frame',           min: 0,  max: 30, step: 1 },
+          { key: 'bodyRadius', label: 'Corner radius',         min: 0,  max: 40, step: 1 },
+          { key: 'holeRadius', label: 'Hole radius',           min: 1,  max: 6,  step: 0.1 },
+          { key: 'pegRadius',  label: 'Peg radius',            min: 1,  max: 7,  step: 0.1 },
+        ],
+      },
+    };
+    const COLOR_LABELS = {
+      '--board-bg': 'Board', '--board-edge': 'Board edge',
+      '--hole-deep': 'Hole centre', '--hole-edge': 'Hole rim',
+      '--peg-0': 'Peg 1', '--peg-1': 'Peg 2',
+      '--track-0': 'Track 1', '--track-1': 'Track 2',
+      '--lane-edge': 'Lane border', '--number': 'Scale numbers', '--label': 'START / FINISH',
+    };
+
+    let layoutName = 'straight'; // default to the long board the game actually uses
+    let geom, colors, board, interactive = false, animMs = 50;
+    // Peg positions persist across geometry/colour rebuilds so the tester state
+    // survives tweaking. Reset only on a board switch.
+    let pegState = [{ front: 0, back: 0 }, { front: 0, back: 0 }];
+
+    const dims = document.getElementById('dims');
+    const colsEl = document.getElementById('cols');
+    const pegInputs = [
+      { f: document.getElementById('p0f'), b: document.getElementById('p0b') },
+      { f: document.getElementById('p1f'), b: document.getElementById('p1b') },
+    ];
+
+    function buildParamControls() {
+      dims.querySelectorAll('.row').forEach((r) => r.remove());
+      for (const p of LAYOUTS[layoutName].params) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `<label>${p.label}</label>
+          <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${geom[p.key]}">
+          <output>${geom[p.key]}</output>`;
+        dims.appendChild(row);
+        const input = row.querySelector('input'), out = row.querySelector('output');
+        input.addEventListener('input', () => { geom[p.key] = parseFloat(input.value); out.textContent = input.value; rebuild(); });
+      }
+    }
+
+    function buildColorControls() {
+      colsEl.querySelectorAll('.crow').forEach((r) => r.remove());
+      for (const v of Object.keys(colors)) {
+        const row = document.createElement('div');
+        row.className = 'crow';
+        row.innerHTML = `<label>${COLOR_LABELS[v] || v}</label><input type="color" value="${colors[v]}">`;
+        colsEl.appendChild(row);
+        row.querySelector('input').addEventListener('input', (e) => { colors[v] = e.target.value; applyColors(); updateOutput(); });
+      }
+    }
+
+    function applyColors() { if (board) for (const [k, v] of Object.entries(colors)) board.element.style.setProperty(k, v); }
+
+    function rebuild() {
+      if (board) board.destroy();
+      const L = LAYOUTS[layoutName];
+      const theme = { ...L.base, colors: { ...colors }, geometry: { ...L.geometry, [L.geomKey]: { ...geom } } };
+      board = createBoard(document.getElementById('preview'), { theme, interactive, onScore: handleDragScore, animMsPerHole: animMs });
+      applyColors();
+      pegState.forEach((p, i) => board.setPegs(i, p)); // re-apply the tester's pegs
+      updateOutput();
+      updateScores();
+    }
+    // Called by the board after an interactive drag (success or rejection).
+    function handleDragScore(r) {
+      if (r.rejected) {
+        if (r.reason === 'gameover') { const w = winnerIndex(); setMsg('scoremsg', `Game over — Player ${w + 1} has won. Set pegs or reset to continue.`, true); }
+        else if (r.reason === 'illegal') setMsg('scoremsg', `Can't peg ${r.points} — not a possible score (1–29, excluding 19, 25, 26, 27).`, true);
+        return; // off-track / backward drops are silent
+      }
+      pullPegStateFromBoard();
+      updateScores();
+      setMsg('scoremsg', `Player ${r.player + 1} → ${r.position}${r.won ? ' · wins!' : ''}`, false);
+    }
+
+    // --- Tester: pegs & scores -------------------------------------------------
+    function syncPegInputs() {
+      pegInputs.forEach((inp, i) => { inp.f.value = pegState[i].front; inp.b.value = pegState[i].back; });
+    }
+    // Exercise the read API: getScore() (array) and getScore(player) (single).
+    function updateScores() {
+      const all = board.getScore();
+      const per = all.map((_, i) => board.getScore(i));
+      document.getElementById('scores').innerHTML =
+        `<strong>getScore()</strong> → <code>[${all.join(', ')}]</code>` +
+        '<br/>' +
+        per.map((s, i) => `getScore(${i}) → <code>${s}</code>`).join('<br/>');
+    }
+    function pullPegStateFromBoard() {
+      const st = board.getState();
+      pegState = st.pegs.map((p) => ({ front: p.front, back: p.back }));
+      syncPegInputs();
+    }
+
+    // --- Validation ------------------------------------------------------------
+    const WIN = 121;
+    const toInt = (v) => { const t = String(v).trim(); return t !== '' && /^-?\d+$/.test(t) ? Number(t) : null; };
+    const setMsg = (id, text, isErr) => { const el = document.getElementById(id); el.textContent = text; el.classList.toggle('err', !!isErr); };
+    const winnerIndex = () => board.getWinner();
+
+    function setPegsFromForm() {
+      const next = pegInputs.map((inp) => ({ front: toInt(inp.f.value), back: toInt(inp.b.value) }));
+      for (let i = 0; i < next.length; i++) {
+        const { front, back } = next[i];
+        if (front === null || back === null) return setMsg('pegmsg', `Player ${i + 1}: pegs must be whole numbers.`, true);
+        if (front < 0 || front > WIN || back < 0 || back > WIN) return setMsg('pegmsg', `Player ${i + 1}: pegs must be 0–${WIN}.`, true);
+        if (back > front) return setMsg('pegmsg', `Player ${i + 1}: the back peg can't be ahead of the front peg.`, true);
+        if (!isLegalScore(front - back)) return setMsg('pegmsg', `Player ${i + 1}: front is ${front - back} ahead of back — not a possible last score (0–29, excluding 19, 25, 26, 27).`, true);
+      }
+      pegState = next;
+      pegState.forEach((p, i) => board.setPegs(i, p));
+      pullPegStateFromBoard();
+      updateScores();
+      setMsg('pegmsg', 'Board set.', false);
+    }
+    // Apply a score, respecting game-over, and refresh the tester UI.
+    function applyPoints(player, points) {
+      const won = winnerIndex();
+      if (won !== -1) return setMsg('scoremsg', `Game over — Player ${won + 1} has won. Set pegs or reset to continue.`, true);
+      const { position, won: nowWon } = board.score(player, points);
+      pullPegStateFromBoard();
+      updateScores();
+      setMsg('scoremsg', `Player ${player + 1} → ${position}${nowWon ? ' · wins!' : ''}`, false);
+    }
+    function applyScoreFromForm() {
+      const player = Number(document.getElementById('sp').value);
+      const points = toInt(document.getElementById('spts').value);
+      if (points === null || !isLegalScore(points)) {
+        return setMsg('scoremsg', `Not a possible score — use 0–29, excluding 19, 25, 26, 27.`, true);
+      }
+      applyPoints(player, points);
+    }
+
+    function updateOutput() {
+      const L = LAYOUTS[layoutName];
+      const keys = Object.keys(L.base.geometry[L.geomKey]);
+      document.getElementById('jslabel').textContent = `geometry.${L.geomKey}`;
+      document.getElementById('jsout').textContent =
+        `${L.geomKey}: {\n` + keys.map((k) => `    ${k}: ${geom[k]},`).join('\n') + '\n}';
+      document.getElementById('cssout').textContent =
+        '.cribbage-board {\n' + Object.entries(colors).map(([k, v]) => `  ${k}: ${v};`).join('\n') + '\n}';
+    }
+
+    // keepPegs: true when only resetting the design (Reset button); false on board switch.
+    function loadLayout(keepPegs = false) {
+      const L = LAYOUTS[layoutName];
+      geom = structuredClone(L.base.geometry[L.geomKey]);
+      colors = { ...L.base.colors };
+      if (!keepPegs) { pegState = [{ front: 0, back: 0 }, { front: 0, back: 0 }]; }
+      buildParamControls();
+      buildColorControls();
+      rebuild();
+      syncPegInputs();
+      setMsg('scoremsg', '', false);
+      setMsg('pegmsg', '', false);
+    }
+
+    const layoutSel = document.getElementById('layout');
+    const interactiveBox = document.getElementById('interactive');
+
+    // Reflect the chosen board in the URL so refresh keeps it and it's linkable.
+    function setBoardInURL() {
+      const u = new URL(location.href);
+      u.searchParams.set('board', layoutName);
+      history.replaceState(null, '', u);
+    }
+
+    layoutSel.addEventListener('change', () => { layoutName = layoutSel.value; setBoardInURL(); loadLayout(false); });
+    interactiveBox.addEventListener('change', () => { interactive = interactiveBox.checked; board?.setInteractive(interactive); });
+    document.getElementById('animspeed').addEventListener('input', (e) => { animMs = Number(e.target.value) || 0; board?.setAnimationSpeed(animMs); });
+    document.getElementById('reset').addEventListener('click', () => loadLayout(true));
+    document.getElementById('setpegs').addEventListener('click', setPegsFromForm);
+    document.getElementById('applyscore').addEventListener('click', applyScoreFromForm);
+    document.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.copy === 'js' ? 'jsout' : 'cssout';
+        navigator.clipboard?.writeText(document.getElementById(id).textContent);
+        const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = t), 900);
+      });
+    });
+
+    // Initial board from the URL (?board=classic|straight); default straight.
+    const urlBoard = new URLSearchParams(location.search).get('board');
+    if (urlBoard && LAYOUTS[urlBoard]) layoutName = urlBoard;
+    layoutSel.value = layoutName;
+    interactiveBox.checked = interactive;
+    setBoardInURL();
+    loadLayout(false);
+  </script>
+</body>
+</html>

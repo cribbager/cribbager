@@ -1,0 +1,236 @@
+:root {
+  --bg: #f5edda;          /* warm parchment */
+  --panel: #fffaf0;       /* warm white */
+  --felt: #fbf4e4;
+  --ink: #2c2418;         /* warm near-black */
+  --muted: #8a7d63;
+  --line: #e2d6bd;
+  --you: #b8332b;         /* You — red (bottom board track) */
+  --bot: #2f6f9e;         /* Opponent — blue (top board track) */
+  --card-red: #c0392b;    /* card suit red — independent of player identity */
+  --btn: #2f6f9e;         /* interactive chrome (buttons, playable/selected) */
+  --accent: #1f7a4d;
+  --gold: #c79a2e;
+  --shadow: 0 1px 3px rgba(60, 45, 20, 0.14);
+  --radius: 12px;
+  /* Standard playing-card proportion 2.5 : 3.5 (= 1.4); sized to balance the board. */
+  --card-w: 70px;
+  --card-h: 98px;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.4 ui-rounded, "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, sans-serif;
+}
+#app { max-width: 880px; margin: 0 auto; padding: 12px 16px 36px; }
+
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+
+/* masthead */
+.masthead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.masthead h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; font-weight: 800; }
+.toggles { display: flex; gap: 8px; align-self: center; }
+.coach-toggle { padding: 6px 14px; font-size: 13px; font-weight: 700; border: 1px solid var(--line);
+  background: var(--panel); color: var(--muted); border-radius: 999px; cursor: pointer; box-shadow: var(--shadow); }
+.coach-toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* signed-in identity in the masthead, sitting alongside the toggles */
+.masthead-user { font-size: 12px; color: var(--muted); align-self: center; white-space: nowrap; }
+.masthead-user b { color: var(--ink); font-weight: 700; }
+
+/* analysis mode: live decision evaluations */
+.analysis-panel { margin-top: 10px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 14px; box-shadow: var(--shadow); }
+.analysis-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+.an-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.an-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; padding: 2px 8px; }
+.an-table td { padding: 2px 8px; }
+.an-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.an-table tr.best { background: rgba(31, 122, 77, 0.10); }
+.an-table tr.best td:first-child { color: var(--accent); font-weight: 800; }
+.an-table tr.yours { box-shadow: inset 3px 0 0 var(--btn); }
+.analysis-legend { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--line);
+  font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.analysis-legend b { color: var(--ink); font-weight: 800; }
+
+/* coach mode: a grade of your last decision vs the reference bot */
+.coach { min-height: 0; }
+.coach-note { margin-top: 10px; padding: 9px 14px; border-radius: 10px; font-weight: 700; font-size: 13.5px; box-shadow: var(--shadow); }
+.coach-note.good { background: rgba(31, 122, 77, 0.12); color: var(--accent); border: 1px solid rgba(31,122,77,0.3); }
+.coach-note.bad { background: rgba(192, 57, 43, 0.10); color: #a3331f; border: 1px solid rgba(192,57,43,0.28); }
+
+/* felt / table */
+.felt {
+  background: var(--felt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.table-inner { width: 100%; max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 4px; }
+/* Inset the player areas so their cards line up with the board body. */
+.seat { display: flex; flex-direction: column; gap: 3px; padding: 0 14px; }
+/* the spoken count/call, to the right of a player's played cards */
+.call { font-size: 18px; font-weight: 800; padding: 6px 16px; border-radius: 999px; white-space: nowrap; }
+.call.you { background: rgba(47, 111, 158, 0.16); color: var(--you); }
+.call.bot { background: rgba(184, 51, 43, 0.16); color: var(--bot); }
+
+/* central stage — only the cut-for-deal now */
+.stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0; }
+.stage:empty { display: none; }
+
+/* pegged cards on each player's side (overlapping, in play order) */
+/* fixed-height pegging row so the player areas don't change height between phases.
+   Cards sit flush against the board, label on the outer side: opponent (above the
+   board) bottom-aligned with labels on top; you (below) top-aligned with labels below. */
+.pegged { display: flex; gap: 12px; min-height: 104px; }
+.pegged > .card:not(:first-child) { margin-left: -28px; } /* overlap played cards (per ACC) */
+.deck { margin-left: auto; display: flex; gap: 16px; }
+
+/* The show: top row = counted hand + starter + big total; second row = breakdown. */
+.show-row { display: flex; align-items: center; gap: 8px; min-height: 104px; }
+.show-row .show-starter { margin-left: 16px; }
+.show-score { margin-left: 16px; font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* matches a card row's reserved height so the seat box never changes height */
+.show-breakdown { display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 6px 16px; min-height: 104px; padding-top: 6px; }
+.bd-item { font-size: 14px; font-weight: 600; color: #5f5238; cursor: default; }
+.bd-item:hover { color: var(--accent); }
+.bd-empty { color: var(--muted); font-style: italic; }
+.crib-tag { background: #efe6d2; border: 1px dashed var(--hole, #b3a07a); border-radius: 7px; padding: 4px 9px;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); align-self: center; margin-right: 6px; }
+
+.seat.opp .pegged { align-items: flex-end; }
+.seat.opp .deck { align-items: flex-end; }
+.seat.you .pegged { align-items: flex-start; }
+.seat.you .deck { align-items: flex-start; }
+
+/* the crib: a dashed card outline with "crib" inside (no faded card, no label) */
+.crib-slot {
+  width: var(--card-w); height: var(--card-h); border-radius: 9px;
+  border: 2px dashed #b3a07a; background: transparent;
+  display: grid; place-items: center;
+  color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;
+}
+
+/* middle: board (fills the table width) + the dealer's deck/crib flush right */
+.board-area { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.board-row { display: block; width: 100%; } /* block so the SVG fills the width (not flex-collapsed) */
+.board-mount { width: 100%; }
+.board-mount svg { display: block; width: 100%; height: auto; }
+.rail-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+/* hand — fixed height so the player areas stay constant between phases */
+.hand { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 104px; }
+
+/* cards */
+/* The base card appearance (.card / .corner / .pip / .red / .black / .facedown)
+   lives in cardFace.css, shared with the card designer. One card size everywhere
+   via --card-w/--card-h. Below are the game-only card states. */
+.card.selectable { cursor: pointer; }
+.card.selectable:hover { transform: translateY(-5px); }
+.card.selected { transform: translateY(-12px); border-color: var(--btn); box-shadow: 0 8px 16px rgba(47,111,158,0.35); }
+.card.legal { cursor: pointer; outline: 2px solid var(--btn); outline-offset: 1px; }
+.card.legal:hover { transform: translateY(-5px); }
+.card.dim { opacity: 0.4; }
+
+/* controls */
+.controls { margin-top: 6px; min-height: 44px; display: flex; align-items: center; gap: 12px; }
+/* Game-flow status — lives inside the control zone, taking the button's place
+   when you have no move (the zone's min-height keeps it from resizing). Left-
+   aligned at the cards' edge (where the button box starts), same font/weight as
+   a button, in dark ink for contrast. */
+.status { color: var(--ink); font-weight: 700; }
+button {
+  font: inherit; font-weight: 700; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink);
+  padding: 10px 18px; border-radius: 10px; cursor: pointer; box-shadow: var(--shadow);
+}
+button.primary { background: var(--btn); border-color: var(--btn); color: #fff; }
+button.primary:disabled { opacity: 0.4; cursor: default; }
+button:active { transform: translateY(1px); }
+
+/* breakdown */
+
+/* opening cut-for-deal screen */
+.cut-row { display: flex; gap: 40px; }
+.cut-seat { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cut-result { font-size: 17px; font-weight: 700; }
+
+/* end overlay */
+.overlay { position: fixed; inset: 0; background: rgba(40, 30, 15, 0.5); display: grid; place-items: center; z-index: 10; }
+.card-modal { background: var(--panel); border-radius: 16px; padding: 28px 36px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,0.32); }
+.card-modal h2 { margin: 0 0 6px; }
+.card-modal p { color: var(--muted); margin: 6px 0 18px; font-weight: 600; }
+
+/* homepage (index.html) — a light page, no game engine */
+.home-card { max-width: 440px; margin: 8vh auto 0; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 16px; padding: 26px 30px 30px; box-shadow: var(--shadow); }
+.home-title { margin: 0 0 14px; font-size: 26px; font-weight: 800; letter-spacing: 0.2px; }
+.home-input { display: block; width: 100%; box-sizing: border-box; padding: 9px 12px; margin: 8px 0;
+  border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
+.home-actions { display: flex; gap: 8px; margin: 12px 0 18px; }
+.home-actions button { flex: 1; }
+.home-join { display: flex; gap: 8px; align-items: center; }
+.home-join .home-input { margin: 0; flex: 1; }
+.home-games { margin-top: 22px; }
+.home-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+.home-game-row { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 0; border-top: 1px solid var(--line); }
+.home-resume { color: var(--btn); font-weight: 700; text-decoration: none; }
+.home-resume:hover { text-decoration: underline; }
+.home-forget { padding: 4px 11px; font-size: 13px; }
+.gameid { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--ink); word-break: break-all; }
+
+/* Completed-game history ("Your games"), shown when signed in. */
+.home-history { margin-top: 22px; }
+.home-history:empty { display: none; }
+.home-stats { font-size: 13px; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+.home-history-list { display: flex; flex-direction: column; }
+.home-history-row { display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-top: 1px solid var(--line); font-size: 13.5px; }
+.home-history-badge { flex: none; width: 22px; height: 22px; border-radius: 999px; display: grid;
+  place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+.home-history-row.won .home-history-badge { background: var(--accent); }
+.home-history-row.lost .home-history-badge { background: var(--muted); }
+.home-history-opp { flex: 1 1 auto; font-weight: 700; color: var(--ink); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.home-history-score { flex: none; font-variant-numeric: tabular-nums; color: var(--ink); }
+.home-history-date { flex: none; color: var(--muted); font-size: 12px; min-width: 56px; text-align: right; }
+
+/* homepage account bar */
+.home-auth { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.home-auth b { color: var(--ink); }
+.home-auth-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; }
+.home-auth-form .home-input { margin: 0; width: auto; flex: 1 1 110px; min-width: 100px; }
+.home-auth-form button { padding: 8px 14px; }
+.home-auth-toggle { font-size: 13px; color: var(--btn); text-decoration: none; }
+.home-auth-toggle:hover { text-decoration: underline; }
+
+/* auth feedback messages — consistent across the homepage auth bar and reset page.
+   Error is red, notice/success is the accent green; both are full-width chips. */
+.home-auth-err, .home-auth-note { font-size: 13px; width: 100%; border-radius: 8px; padding: 7px 11px; font-weight: 600; }
+.home-auth-err:empty, .home-auth-note:empty { display: none; }
+.home-auth-err { color: #a3331f; background: rgba(192, 57, 43, 0.10); border: 1px solid rgba(192, 57, 43, 0.22); }
+.home-auth-note { color: var(--accent); background: rgba(31, 122, 77, 0.10); border: 1px solid rgba(31, 122, 77, 0.24); }
+
+@media (max-width: 560px) {
+  :root { --card-w: 52px; --card-h: 73px; }
+  .card .pip { font-size: 26px; }
+  .card .corner { font-size: 14px; }
+  /* homepage card: give it breathing room near the edges and stack the auth form
+     so the fields don't squeeze into unreadable columns on a phone. */
+  .home-card { margin-top: 4vh; padding: 22px 18px 24px; }
+  .home-auth-form { width: 100%; }
+  .home-auth-form .home-input { flex-basis: 100%; min-width: 0; }
+  .home-auth-form button { width: 100%; }
+  .home-actions { flex-wrap: wrap; }
+  .home-actions button { flex: 1 1 140px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .peg { transition: none !important; }
+}

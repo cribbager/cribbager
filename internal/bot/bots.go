@@ -1,0 +1,64 @@
+package bot
+
+import (
+	"math/rand"
+
+	"github.com/cribbager/cribbager/internal/bot/eval"
+	"github.com/cribbager/cribbager/internal/cribbage"
+	"github.com/cribbager/cribbager/internal/game"
+)
+
+// --- Random: legal random moves ----------------------------------------------
+
+// randomBot plays an arbitrary legal move. It is kept as the baseline: a floor
+// for the strength ladder, and the move generator the engine's legality and
+// termination tests run thousands of varied game states through (a deterministic
+// bot would replay one game and cover almost nothing).
+type randomBot struct{ rng *rand.Rand }
+
+// NewRandom returns a bot that discards and plays at random.
+func NewRandom(rng *rand.Rand) Bot { return &randomBot{rng: rng} }
+
+func (b *randomBot) Name() string { return "random" }
+
+func (b *randomBot) Discard(v game.PlayerView) [2]cribbage.Card {
+	h := v.YourHand
+	if len(h) < 2 {
+		panic("bot: Discard called with fewer than two cards in hand")
+	}
+	i := b.rng.Intn(len(h))
+	j := b.rng.Intn(len(h) - 1)
+	if j >= i {
+		j++
+	}
+	return [2]cribbage.Card{h[i], h[j]}
+}
+
+func (b *randomBot) Play(v game.PlayerView) cribbage.Card {
+	return v.LegalPlays[b.rng.Intn(len(v.LegalPlays))]
+}
+
+// --- Champion: the shipped bot -----------------------------------------------
+
+// champion is THE bot — the single opponent the product plays against and the
+// one we keep improving. Discard: exact crib-aware expected value (deterministic
+// table lookup, no sampling). Pegging: one-ply net EV against an opponent model
+// that prices in the opponent's best reply, weighted by how likely they are to
+// hold each card. Fully deterministic — same view in, same move out — so it
+// takes no RNG.
+//
+// To improve it: build a challenger in internal/bot/lab, beat this in a
+// duplicate-deal comparison (bot.Compare, run as a go test), then fold the
+// winning change in here and delete the challenger. There is only ever one champion.
+type champion struct{}
+
+func newChampion() Bot { return champion{} }
+
+func (champion) Name() string { return DefaultName }
+
+func (champion) Discard(v game.PlayerView) [2]cribbage.Card {
+	d, _ := eval.BestDiscardEV(hand6(v.YourHand), v.Dealer == v.You)
+	return d
+}
+
+func (champion) Play(v game.PlayerView) cribbage.Card { return eval.BestPlayNetEV(v) }

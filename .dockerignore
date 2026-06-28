@@ -1,0 +1,8 @@
+# Keep the build context small: only cmd/, internal/, go.mod, and web/public are
+# needed by the Dockerfile.
+.git
+bin
+docs
+web/node_modules
+web/scripts
+*.md

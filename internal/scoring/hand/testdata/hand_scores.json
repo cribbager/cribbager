@@ -1,0 +1,116 @@
+[
+  {
+    "name": "zero hand (nothing scores)",
+    "hand": ["2C", "4D", "6H", "8S"],
+    "starter": "QC",
+    "isCrib": false,
+    "total": 0,
+    "points": {"fifteens": 0, "pairs": 0, "runs": 0, "flush": 0, "nobs": 0}
+  },
+  {
+    "name": "no wraparound: Q-K-A is not a run, A-2 is too short",
+    "hand": ["QC", "KD", "AH", "2S"],
+    "starter": "7C",
+    "isCrib": false,
+    "total": 0,
+    "points": {"fifteens": 0, "pairs": 0, "runs": 0, "flush": 0, "nobs": 0}
+  },
+  {
+    "name": "the 29 hand (maximum): J + four 5s, cut matches the jack",
+    "hand": ["5C", "5D", "5H", "JS"],
+    "starter": "5S",
+    "isCrib": false,
+    "total": 29,
+    "points": {"fifteens": 16, "pairs": 12, "runs": 0, "flush": 0, "nobs": 1}
+  },
+  {
+    "name": "the 28 hand: four 5s + a ten, no jack of cut suit",
+    "hand": ["5C", "5D", "5H", "5S"],
+    "starter": "TD",
+    "isCrib": false,
+    "total": 28,
+    "points": {"fifteens": 16, "pairs": 12, "runs": 0, "flush": 0, "nobs": 0}
+  },
+  {
+    "name": "double run of three for 8 (run 6 + the pair it bundles 2)",
+    "hand": ["4H", "5C", "5S", "6D"],
+    "starter": "KH",
+    "isCrib": false,
+    "total": 16,
+    "points": {"fifteens": 8, "pairs": 0, "runs": 8, "flush": 0, "nobs": 0},
+    "runLength": 3,
+    "multiplicity": 2
+  },
+  {
+    "name": "triple run for 15",
+    "hand": ["5C", "5D", "5H", "6S"],
+    "starter": "4C",
+    "isCrib": false,
+    "total": 23,
+    "points": {"fifteens": 8, "pairs": 0, "runs": 15, "flush": 0, "nobs": 0},
+    "runLength": 3,
+    "multiplicity": 3
+  },
+  {
+    "name": "double-double run for 16",
+    "hand": ["3C", "3D", "4H", "5S"],
+    "starter": "5C",
+    "isCrib": false,
+    "total": 20,
+    "points": {"fifteens": 4, "pairs": 0, "runs": 16, "flush": 0, "nobs": 0},
+    "runLength": 3,
+    "multiplicity": 4
+  },
+  {
+    "name": "run of five and a five-card flush",
+    "hand": ["AH", "2H", "3H", "4H"],
+    "starter": "5H",
+    "isCrib": false,
+    "total": 12,
+    "points": {"fifteens": 2, "pairs": 0, "runs": 5, "flush": 5, "nobs": 0},
+    "runLength": 5,
+    "multiplicity": 1
+  },
+  {
+    "name": "four-card flush scores 4 in a hand",
+    "hand": ["2H", "5H", "7H", "9H"],
+    "starter": "KC",
+    "isCrib": false,
+    "total": 6,
+    "points": {"fifteens": 2, "pairs": 0, "runs": 0, "flush": 4, "nobs": 0}
+  },
+  {
+    "name": "four-card flush scores 0 in the crib (same cards)",
+    "hand": ["2H", "5H", "7H", "9H"],
+    "starter": "KC",
+    "isCrib": true,
+    "total": 2,
+    "points": {"fifteens": 2, "pairs": 0, "runs": 0, "flush": 0, "nobs": 0}
+  },
+  {
+    "name": "five-card flush does score in the crib",
+    "hand": ["2H", "5H", "7H", "9H"],
+    "starter": "QH",
+    "isCrib": true,
+    "total": 7,
+    "points": {"fifteens": 2, "pairs": 0, "runs": 0, "flush": 5, "nobs": 0}
+  },
+  {
+    "name": "nobs: jack in hand matches the starter's suit, plus a run of four",
+    "hand": ["JH", "4C", "5D", "6S"],
+    "starter": "7H",
+    "isCrib": false,
+    "total": 9,
+    "points": {"fifteens": 4, "pairs": 0, "runs": 4, "flush": 0, "nobs": 1},
+    "runLength": 4,
+    "multiplicity": 1
+  },
+  {
+    "name": "standalone pair (not in a run) plus fifteens",
+    "hand": ["6C", "9D", "9H", "2S"],
+    "starter": "KC",
+    "isCrib": false,
+    "total": 6,
+    "points": {"fifteens": 4, "pairs": 2, "runs": 0, "flush": 0, "nobs": 0}
+  }
+]
