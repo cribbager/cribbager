@@ -92,11 +92,14 @@ jobs:
 
   # Full-game integration smoke tests: boot the server and drive a complete bot game
   # and a human-vs-human game in headless Chrome — the real server↔client SSE path.
-  # Non-blocking for now (continue-on-error) to gauge CI stability before making it a
-  # required gate; the deploy does not wait on it.
+  # Blocking: a smoke failure fails CI (the job reports the "smoke" status context,
+  # which branch protection requires). The harness is built for stability — proper
+  # waitForSelector waits with generous timeouts, CDP-hiccup retries, large step
+  # budgets, a healthz readiness poll on boot, and local Chrome with no network
+  # dependency — and ran green across local repeats and recent CI. The deploy job
+  # does not wait on it (it gates on go/web/lint only).
   smoke:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
