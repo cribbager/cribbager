@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Game analysis · Cribbager</title>
+    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <link rel="icon" href="data:," />
+    <!-- cardFace.css: the analysis view renders real card faces for each dealt hand. -->
+    <link rel="stylesheet" href="/src/ui/cardFace.css" />
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <!-- Global site header (wordmark + auth/identity), mounted by header.js. -->
+    <header id="site-header"></header>
+    <!-- Post-game discard analysis for one finished game (?game=<id>). -->
+    <div id="analyze"></div>
+    <script type="module" src="/src/ui/analyze.js"></script>
+  </body>
+</html>

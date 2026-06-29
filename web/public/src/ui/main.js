@@ -83,8 +83,12 @@ quitButton.addEventListener('click', onQuit);
 // menu, to avoid mis-taps).
 app.append(elFelt, h('div', { class: 'game-footer' }, quitButton));
 // Mount the global site header (wordmark + auth/identity). It sits above #app and
-// never sets the page width, so the board layout is unaffected.
-mountHeader();
+// never sets the page width, so the board layout is unaffected. We also mirror the
+// auth state locally: post-game discard analysis is account-scoped (it lives under
+// /users/me/...), so the "Analyze this game" link on the game-over overlay only
+// appears for a signed-in participant — a guest's account-less game would 404.
+let currentUser = null;
+mountHeader({ onAuthChange: (u) => { currentUser = u; } });
 
 // setChrome shows the right header controls for the current screen: Leave only
 // while in a game.
@@ -393,12 +397,19 @@ async function onEvent(e) {
         case 'gameOver': {
             const won = e.winner === HUMAN;
             const skunk = e.skunk === 'double' ? ' — a double skunk!' : e.skunk === 'skunk' ? ' — a skunk!' : '';
+            // Post-game discard analysis (A8): offered only to a signed-in participant,
+            // for whom this finished game is a stored result (a guest's game isn't
+            // account-scoped, so the analysis endpoint would 404 — don't show it).
+            const analyzeLink = (currentUser && curGameId)
+                ? h('a', { class: 'end-analyze', href: '/analyze.html?game=' + encodeURIComponent(curGameId) }, 'Analyze this game')
+                : null;
             // vs a human: "Rematch" hosts a fresh game (new shareable link). vs the
             // bot: "New game" starts another immediately. Either way "Menu" returns.
             endOverlay(won ? 'You win!' : `${oppLabel} wins`,
                 `${state.score[HUMAN]} – ${state.score[BOT]}${skunk}`,
                 lastMode === 'mp' ? 'Rematch' : 'New game',
-                lastMode === 'mp' ? () => goNewOpen(lastName) : goNewBot);
+                lastMode === 'mp' ? () => goNewOpen(lastName) : goNewBot,
+                analyzeLink);
             break;
         }
     }
@@ -764,8 +775,9 @@ async function onQuit() {
 }
 
 // endOverlay is the terminal modal (game over / opponent-left): a primary action
-// (rematch / new game, a navigation) plus Menu (home).
-function endOverlay(title, sub, primaryLabel, onPrimary) {
+// (rematch / new game, a navigation) plus Menu (home). `extra`, when given, is an
+// extra node rendered below the buttons (used for the post-game "Analyze" link).
+function endOverlay(title, sub, primaryLabel, onPrimary, extra) {
     clearControls();
     if (curGameId) clearGame(curGameId);
     if (activeStream) { activeStream.close(); activeStream = null; }
@@ -775,7 +787,11 @@ function endOverlay(title, sub, primaryLabel, onPrimary) {
     const menu = h('button', {}, 'Menu');
     menu.style.marginLeft = '8px';
     menu.addEventListener('click', goHome);
-    overlay.append(h('div', { class: 'card-modal' }, h('h2', {}, title), sub ? h('p', {}, sub) : '', h('div', {}, primary, menu)));
+    overlay.append(h('div', { class: 'card-modal' },
+        h('h2', {}, title),
+        sub ? h('p', {}, sub) : '',
+        h('div', {}, primary, menu),
+        extra || ''));
     document.body.append(overlay);
 }
 
