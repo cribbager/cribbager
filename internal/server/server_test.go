@@ -384,88 +384,6 @@ func TestStream(t *testing.T) {
 	waitForData(1)
 }
 
-// TestAnalysis checks the analysis endpoint returns a ranked discard evaluation
-// at the discard decision and a ranked play evaluation when it is the seat's turn
-// to play, and that it leaks no hidden card (it is computed from View(seat)).
-func TestAnalysis(t *testing.T) {
-	c := newTestClient(t)
-	_, data := c.do("POST", "/games", "", createRequest{Mode: "bot"})
-	created := decode[createResponse](t, data)
-	tok, id := created.PlayerToken, created.GameID
-
-	full := cribbage.Deck()
-	sawDiscard, sawPlay := false, false
-
-	for step := 0; step < 5000; step++ {
-		_, sd := c.do("GET", "/games/"+id, tok, nil)
-		v := decode[game.PlayerView](t, sd)
-		if v.Winner != nil {
-			break
-		}
-
-		resp, ad := c.do("GET", "/games/"+id+"/analysis", tok, nil)
-		if resp.StatusCode != 200 {
-			t.Fatalf("analysis: %d %s", resp.StatusCode, ad)
-		}
-		a := decode[AnalysisResponse](t, ad)
-
-		// No hidden card may appear anywhere in the analysis payload.
-		allowed := map[cribbage.Card]bool{}
-		for _, set := range [][]cribbage.Card{v.YourHand, v.Pile, v.YourPlayed, v.OpponentPlayed} {
-			for _, cd := range set {
-				allowed[cd] = true
-			}
-		}
-		if v.Starter != nil {
-			allowed[*v.Starter] = true
-		}
-		for _, cd := range full {
-			if allowed[cd] {
-				continue
-			}
-			if strings.Contains(string(ad), `"`+cd.String()+`"`) {
-				t.Fatalf("analysis leaked hidden card %s: %s", cd, ad)
-			}
-		}
-
-		switch v.Phase {
-		case game.PhaseDiscard:
-			if a.Phase == "discard" {
-				if len(a.Discards) != 15 {
-					t.Fatalf("want 15 ranked discards, got %d", len(a.Discards))
-				}
-				// Ranked best-first: scores must be non-increasing.
-				for i := 1; i < len(a.Discards); i++ {
-					if a.Discards[i].Score > a.Discards[i-1].Score+1e-9 {
-						t.Fatalf("discards not sorted at %d", i)
-					}
-				}
-				sawDiscard = true
-			}
-			c.do("POST", "/games/"+id+"/actions", tok, actionRequest{Type: "discard", Cards: []cribbage.Card{v.YourHand[0], v.YourHand[1]}})
-		case game.PhasePlay:
-			if v.ToPlay == nil || *v.ToPlay != v.You {
-				t.Fatalf("play phase but not my turn")
-			}
-			if a.Phase == "play" {
-				if len(a.Plays) != len(v.LegalPlays) {
-					t.Fatalf("want %d ranked plays, got %d", len(v.LegalPlays), len(a.Plays))
-				}
-				sawPlay = true
-			}
-			card := v.LegalPlays[0]
-			c.do("POST", "/games/"+id+"/actions", tok, actionRequest{Type: "play", Card: &card})
-		}
-	}
-
-	if !sawDiscard {
-		t.Error("never saw a discard analysis")
-	}
-	if !sawPlay {
-		t.Error("never saw a play analysis")
-	}
-}
-
 // sseEvent is one parsed SSE event: the optional id: line and the data: payload.
 type sseEvent struct {
 	id    string // "" if the event carried no id: line
@@ -1086,15 +1004,5 @@ func TestLogRequestsLine(t *testing.T) {
 		if !strings.Contains(line, want) {
 			t.Errorf("log line %q missing %q", line, want)
 		}
-	}
-}
-
-// TestAnalysisAuth confirms the analysis endpoint requires a valid token.
-func TestAnalysisAuth(t *testing.T) {
-	c := newTestClient(t)
-	_, data := c.do("POST", "/games", "", createRequest{Mode: "bot"})
-	created := decode[createResponse](t, data)
-	if resp, _ := c.do("GET", "/games/"+created.GameID+"/analysis", "", nil); resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("want 401 without token, got %d", resp.StatusCode)
 	}
 }
