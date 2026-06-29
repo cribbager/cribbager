@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,9 +13,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cribbager/cribbager/internal/bot"
 	"github.com/cribbager/cribbager/internal/cribbage"
 	"github.com/cribbager/cribbager/internal/game"
 )
+
+// TestResultMetaGobRoundTrip guards the version metadata blob the Postgres store
+// persists: it must survive gob encode/decode unchanged.
+func TestResultMetaGobRoundTrip(t *testing.T) {
+	m := resultMeta{
+		EngineVersion: game.EngineVersion,
+		Bots:          [2]BotInfo{{}, {Name: bot.DefaultName, Version: bot.Version}},
+	}
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(m); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	var got resultMeta
+	if err := gob.NewDecoder(&buf).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got != m {
+		t.Fatalf("meta changed across gob round-trip: got %+v, want %+v", got, m)
+	}
+}
 
 // flakyResultStore fails its first failsLeft SaveResult calls, then delegates.
 type flakyResultStore struct {
@@ -184,8 +206,8 @@ func TestUserGamesEndpoint(t *testing.T) {
 // TestGameOverRecordsResult plays a logged-in bot game to completion over HTTP and
 // asserts the finished game lands in the player's history.
 func TestGameOverRecordsResult(t *testing.T) {
-	c, _ := newAuthedServer(t)
-	c.signup("dave")
+	c, rs := newAuthedServer(t)
+	uid := c.signup("dave")
 
 	resp, data := c.do("POST", "/games", "", createRequest{Mode: "bot"})
 	if resp.StatusCode != http.StatusCreated {
@@ -228,6 +250,23 @@ func TestGameOverRecordsResult(t *testing.T) {
 	if got.Stats.Total != 1 {
 		t.Errorf("stats total = %d, want 1", got.Stats.Total)
 	}
+
+	// The stored record carries the engine version and the bot seat's name+version
+	// (the creator is the human seat0; the opponent in "bot" mode is seat1).
+	stored, _ := rs.ResultsForPlayer(uid, 50)
+	if len(stored) != 1 {
+		t.Fatalf("stored results = %d, want 1", len(stored))
+	}
+	r := stored[0]
+	if r.EngineVersion != game.EngineVersion {
+		t.Errorf("engine version = %q, want %q", r.EngineVersion, game.EngineVersion)
+	}
+	if r.Bots[0] != (BotInfo{}) {
+		t.Errorf("human seat recorded a bot: %+v", r.Bots[0])
+	}
+	if r.Bots[1].Name != bot.DefaultName || r.Bots[1].Version != bot.Version {
+		t.Errorf("bot seat = %+v, want name=%q version=%q", r.Bots[1], bot.DefaultName, bot.Version)
+	}
 }
 
 // TestPgResultStore is gated on TEST_DATABASE_URL. It exercises the results table:
@@ -252,7 +291,7 @@ func TestPgResultStore(t *testing.T) {
 			t.Fatalf("save %s: %v", r.ID, err)
 		}
 	}
-	must(Result{ID: "a", PlayerIDs: [2]string{"p1", "p2"}, Names: [2]string{"P1", "P2"}, Scores: [2]int{121, 95}, Winner: 0, Events: []game.Event{}, EndedAt: now.Add(-2 * time.Minute)})
+	must(Result{ID: "a", PlayerIDs: [2]string{"p1", "p2"}, Names: [2]string{"P1", "P2"}, Scores: [2]int{121, 95}, Winner: 0, Events: []game.Event{}, EndedAt: now.Add(-2 * time.Minute), EngineVersion: game.EngineVersion, Bots: [2]BotInfo{{}, {Name: bot.DefaultName, Version: bot.Version}}})
 	must(Result{ID: "b", PlayerIDs: [2]string{"", "p1"}, Names: [2]string{"Guest", "P1"}, Scores: [2]int{121, 60}, Winner: 0, Events: []game.Event{}, EndedAt: now.Add(-1 * time.Minute)})
 	must(Result{ID: "a", PlayerIDs: [2]string{"p1", "p2"}, Names: [2]string{"X", "Y"}, Scores: [2]int{0, 0}, Winner: 1, Events: []game.Event{}, EndedAt: now}) // dup id -> ignored
 
@@ -268,6 +307,11 @@ func TestPgResultStore(t *testing.T) {
 	}
 	if games[0].PlayerIDs[0] != "" {
 		t.Errorf("guest seat round-tripped as %q, want empty", games[0].PlayerIDs[0])
+	}
+	// Game "a" (games[1]) carried version metadata; it must survive the round-trip.
+	if a := games[1]; a.EngineVersion != game.EngineVersion ||
+		a.Bots[0] != (BotInfo{}) || a.Bots[1] != (BotInfo{Name: bot.DefaultName, Version: bot.Version}) {
+		t.Errorf("version metadata round-trip wrong: engine=%q bots=%+v", a.EngineVersion, a.Bots)
 	}
 	total, wins, err := rs.PlayerStats("p1")
 	if err != nil {

@@ -13,6 +13,14 @@ type PgResultStore struct {
 	db *sql.DB
 }
 
+// resultMeta is the small bundle of code-version metadata gob-encoded into the
+// results.meta column: the engine version and per-seat bot info. Keeping it in one
+// blob (rather than a column per field) makes adding future metadata additive.
+type resultMeta struct {
+	EngineVersion string
+	Bots          [2]BotInfo
+}
+
 // NewPgResultStore ensures the results table and its indexes exist on the shared
 // pool and returns the store.
 func NewPgResultStore(db *sql.DB) (*PgResultStore, error) {
@@ -27,8 +35,11 @@ func NewPgResultStore(db *sql.DB) (*PgResultStore, error) {
 			score_1     INTEGER NOT NULL,
 			winner      INTEGER NOT NULL,
 			events      BYTEA,
-			ended_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+			ended_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+			meta        BYTEA
 		)`,
+		// Additive migration for tables created before the meta column existed.
+		`ALTER TABLE results ADD COLUMN IF NOT EXISTS meta BYTEA`,
 		`CREATE INDEX IF NOT EXISTS results_player0 ON results (player_id_0, ended_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS results_player1 ON results (player_id_1, ended_at DESC)`,
 	}
@@ -45,15 +56,19 @@ func (p *PgResultStore) SaveResult(r Result) error {
 	if err := gob.NewEncoder(&buf).Encode(r.Events); err != nil {
 		return err
 	}
+	var metaBuf bytes.Buffer
+	if err := gob.NewEncoder(&metaBuf).Encode(resultMeta{EngineVersion: r.EngineVersion, Bots: r.Bots}); err != nil {
+		return err
+	}
 	ctx, cancel := dbCtx()
 	defer cancel()
 	_, err := p.db.ExecContext(ctx, `
 		INSERT INTO results
-			(id, player_id_0, player_id_1, name_0, name_1, score_0, score_1, winner, events, ended_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+			(id, player_id_0, player_id_1, name_0, name_1, score_0, score_1, winner, events, ended_at, meta)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT (id) DO NOTHING`,
 		r.ID, nullStr(r.PlayerIDs[0]), nullStr(r.PlayerIDs[1]),
-		r.Names[0], r.Names[1], r.Scores[0], r.Scores[1], r.Winner, buf.Bytes(), r.EndedAt)
+		r.Names[0], r.Names[1], r.Scores[0], r.Scores[1], r.Winner, buf.Bytes(), r.EndedAt, metaBuf.Bytes())
 	return err
 }
 
@@ -61,7 +76,7 @@ func (p *PgResultStore) ResultsForPlayer(playerID string, limit int) ([]Result, 
 	ctx, cancel := dbCtx()
 	defer cancel()
 	rows, err := p.db.QueryContext(ctx, `
-		SELECT id, player_id_0, player_id_1, name_0, name_1, score_0, score_1, winner, ended_at
+		SELECT id, player_id_0, player_id_1, name_0, name_1, score_0, score_1, winner, ended_at, meta
 		FROM results
 		WHERE player_id_0 = $1 OR player_id_1 = $1
 		ORDER BY ended_at DESC
@@ -74,11 +89,19 @@ func (p *PgResultStore) ResultsForPlayer(playerID string, limit int) ([]Result, 
 	for rows.Next() {
 		var r Result
 		var p0, p1 sql.NullString
+		var meta []byte
 		if err := rows.Scan(&r.ID, &p0, &p1, &r.Names[0], &r.Names[1],
-			&r.Scores[0], &r.Scores[1], &r.Winner, &r.EndedAt); err != nil {
+			&r.Scores[0], &r.Scores[1], &r.Winner, &r.EndedAt, &meta); err != nil {
 			return nil, err
 		}
 		r.PlayerIDs[0], r.PlayerIDs[1] = p0.String, p1.String
+		if len(meta) > 0 { // NULL for rows written before the meta column existed
+			var m resultMeta
+			if err := gob.NewDecoder(bytes.NewReader(meta)).Decode(&m); err != nil {
+				return nil, err
+			}
+			r.EngineVersion, r.Bots = m.EngineVersion, m.Bots
+		}
 		out = append(out, r)
 	}
 	return out, rows.Err()

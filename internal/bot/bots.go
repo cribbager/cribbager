@@ -21,6 +21,10 @@ func NewRandom(rng *rand.Rand) Bot { return &randomBot{rng: rng} }
 
 func (b *randomBot) Name() string { return "random" }
 
+// Version is the baseline's version. The random bot is intentionally fixed (it's
+// the strength floor and the engine's move generator), so it stays at "1".
+func (b *randomBot) Version() string { return "1" }
+
 func (b *randomBot) Discard(v game.PlayerView) [2]cribbage.Card {
 	h := v.YourHand
 	if len(h) < 2 {
@@ -55,6 +59,9 @@ type champion struct{}
 func newChampion() Bot { return champion{} }
 
 func (champion) Name() string { return DefaultName }
+
+// Version reports the shipped bot's algorithm version (see Version).
+func (champion) Version() string { return Version }
 
 func (champion) Discard(v game.PlayerView) [2]cribbage.Card {
 	d, _ := eval.BestDiscardEV(hand6(v.YourHand), v.Dealer == v.You)

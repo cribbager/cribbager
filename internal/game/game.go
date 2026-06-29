@@ -10,6 +10,12 @@ import (
 
 const defaultTarget = 121
 
+// EngineVersion is the cribbage engine's code version, recorded with each
+// finished game so a later replay/analysis knows which rules implementation
+// produced it. Bump it whenever a change could alter engine behaviour. It is a
+// code version, distinct from (*Game).Version, which counts a single game's events.
+const EngineVersion = "1"
+
 // Options configure a new game.
 type Options struct {
 	Deck        DeckSource // required: source of shuffled decks
