@@ -10,9 +10,10 @@ on:
 permissions:
   contents: read
 
-# Cancel superseded runs on a PR branch; never cancel a main run (cancel-in-progress
-# is false for push events, so a deploy in flight is not interrupted — and the deploy
-# job additionally serializes via its own group below).
+# Cancel superseded runs on a PR branch (re-pushes supersede in-flight CI). Main runs
+# are not cancelled here, so each merge's checks still complete; deploy de-duplication
+# is handled by the deploy job's own cancel-in-progress group (see below), which lets a
+# burst of merges collapse into a single deploy of the cumulative main.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -156,7 +157,12 @@ jobs:
     needs: [go, web, lint, changes]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
-    concurrency: deploy-production
+    # Collapse bursts of merges into one deploy: a newer main deploy cancels a
+    # still-pending/in-flight older one. main is cumulative, so deploying only the
+    # latest commit is correct; an interrupted fly release is superseded by the next.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
       # Pinned to a commit SHA (was @master): this action runs in the privileged job
