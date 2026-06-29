@@ -479,9 +479,32 @@ button:active { transform: translateY(1px); }
 .an-message-title { font-size: var(--text-lg); font-weight: 800; margin: 0 0 var(--space-2); color: var(--color-ink); }
 .an-message-body { color: var(--color-ink-muted); margin: 0 0 var(--space-3); }
 
-/* "Analyze this game" link under the game-over overlay buttons. */
-.end-analyze { display: inline-block; margin-top: 14px; color: var(--btn); font-weight: 700; text-decoration: none; }
-.end-analyze:hover { text-decoration: underline; }
+/* Post-game links under the game-over overlay buttons ("Analyze" / "Replay"). */
+.end-links { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.end-analyze, .end-replay { display: inline-block; color: var(--btn); font-weight: 700; text-decoration: none; }
+.end-analyze:hover, .end-replay:hover { text-decoration: underline; }
+/* "Open full replay" link on the analysis page summary. */
+.an-replay { display: inline-block; margin: 0 0 var(--space-4); color: var(--btn); font-weight: 700; text-decoration: none; }
+.an-replay:hover { text-decoration: underline; }
+
+/* === Game replay (A2) — the dedicated move-by-move spectator view =========== */
+#replay { max-width: 860px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
+/* The replay's felt mirrors the live table, minus any interactive affordances. */
+.replay-felt .card.selectable, .replay-felt .card.legal { cursor: default; }
+.replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
+  margin-bottom: var(--space-4); }
+.replay-controls .btn { min-width: 84px; }
+.replay-jump-wrap { display: inline-flex; align-items: center; gap: var(--space-2);
+  font-weight: 700; font-size: var(--text-sm); color: var(--color-ink-muted); }
+.replay-jump { font: inherit; padding: var(--space-1) var(--space-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); }
+.replay-scrub { flex: 1 1 200px; min-width: 160px; }
+.replay-label { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-ink); white-space: nowrap; }
+.replay-dealer-tag { margin-left: var(--space-2); font-size: var(--text-xs); text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--color-ink-muted); }
+.replay-count { text-align: center; padding: var(--space-2) 0; font-size: var(--text-md);
+  color: var(--color-ink-muted); font-weight: 700; }
+.replay-count strong { color: var(--color-ink); font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
 
 /* === Discard trainer (A5) — a standalone practice page ====================== */
 #practice { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4); }

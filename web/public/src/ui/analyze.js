@@ -110,9 +110,14 @@ function renderAnalysis(data) {
         ? hands
         : [h('div', { class: 'panel an-message' }, h('p', { class: 'an-message-body' }, 'No discards were recorded for this game.'))];
 
+    // A2: a link to the richer move-by-move replay of this same finished game.
+    const replayLink = h('a', { class: 'an-replay', href: '/replay.html?game=' + encodeURIComponent(gameId) },
+        'Open the full move-by-move replay →');
+
     root.replaceChildren(
         h('h1', { class: 'an-title' }, 'Game analysis'),
         h('p', { class: 'an-subtitle' }, 'How your discards stacked up against the engine.'),
+        replayLink,
         summary,
         h('div', { class: 'an-hands' }, ...body));
 }

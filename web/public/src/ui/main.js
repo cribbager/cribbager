@@ -400,8 +400,12 @@ async function onEvent(e) {
             // Post-game discard analysis (A8): offered only to a signed-in participant,
             // for whom this finished game is a stored result (a guest's game isn't
             // account-scoped, so the analysis endpoint would 404 — don't show it).
-            const analyzeLink = (currentUser && curGameId)
-                ? h('a', { class: 'end-analyze', href: '/analyze.html?game=' + encodeURIComponent(curGameId) }, 'Analyze this game')
+            // A2 adds a "Replay this game" link beside it (same account-scoping):
+            // the move-by-move spectator replay of this finished game.
+            const endLinks = (currentUser && curGameId)
+                ? h('div', { class: 'end-links' },
+                    h('a', { class: 'end-analyze', href: '/analyze.html?game=' + encodeURIComponent(curGameId) }, 'Analyze this game'),
+                    h('a', { class: 'end-replay', href: '/replay.html?game=' + encodeURIComponent(curGameId) }, 'Replay this game'))
                 : null;
             // vs a human: "Rematch" hosts a fresh game (new shareable link). vs the
             // bot: "New game" starts another immediately. Either way "Menu" returns.
@@ -409,7 +413,7 @@ async function onEvent(e) {
                 `${state.score[HUMAN]} – ${state.score[BOT]}${skunk}`,
                 lastMode === 'mp' ? 'Rematch' : 'New game',
                 lastMode === 'mp' ? () => goNewOpen(lastName) : goNewBot,
-                analyzeLink);
+                endLinks);
             break;
         }
     }

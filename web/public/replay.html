@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Game replay · Cribbager</title>
+    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <link rel="icon" href="data:," />
+    <!-- cardFace.css: the replay renders real card faces for both hands + the crib. -->
+    <link rel="stylesheet" href="/src/ui/cardFace.css" />
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <!-- Global site header (wordmark + auth/identity), mounted by header.js. -->
+    <header id="site-header"></header>
+    <!-- Move-by-move replay of one finished game with full visibility (?game=<id>). -->
+    <div id="replay"></div>
+    <script type="module" src="/src/ui/replay.js"></script>
+  </body>
+</html>
