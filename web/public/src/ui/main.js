@@ -77,9 +77,11 @@ function setStatus(text) {
 // (so the opponent is informed they left); then it returns to the home menu.
 const quitButton = h('button', { class: 'quit-toggle' }, 'Leave game');
 quitButton.addEventListener('click', onQuit);
-// The signed-in identity now lives in the global site header (mounted below); the
-// game masthead only carries the game-specific Leave control.
-app.append(h('div', { class: 'masthead' }, h('h1', {}, 'Cribbage'), h('div', { class: 'toggles' }, quitButton)), elFelt);
+// The signed-in identity now lives in the global site header, and branding comes
+// from the global wordmark — so the game view no longer needs its own title. The
+// Leave control sits in a footer below the board (away from the header profile
+// menu, to avoid mis-taps).
+app.append(elFelt, h('div', { class: 'game-footer' }, quitButton));
 // Mount the global site header (wordmark + auth/identity). It sits above #app and
 // never sets the page width, so the board layout is unaffected.
 mountHeader();
