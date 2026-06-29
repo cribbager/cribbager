@@ -6,7 +6,7 @@
 // every counted element. The opponent is a silent veteran; the only "voice" is
 // functional cribbage language announced as each player plays/counts.
 import { createBoard, straightBoard } from '../board/board.js';
-import { cardsEqual, parseCard, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
+import { cardsEqual, parseCard } from '../engine/cards.js';
 import { cardFace } from './cardFace.js';
 import { GameClient } from '../net/client.js';
 // HUMAN/BOT are UI positions: "me" at the bottom, the opponent at the top.
@@ -52,71 +52,13 @@ const fresh = () => ({
     legal: null,
     cut: null,
     show: null,
-    coachNote: null,
 });
 let state = fresh();
-let pendingAnalysis = null;
-let coachOn = false;
-let analysisOn = false;
-const lbl = (c) => RANK_LABELS[c.rank] + SUIT_SYMBOLS[c.suit];
-const slbl = (s) => lbl(parseCard(s));
-const sgn = (n) => (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(1);
-const sameStrSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
-function coachDiscard(chosen) {
-    const ds = pendingAnalysis?.discards;
-    if (!ds || !ds.length) {
-        state.coachNote = null;
-        return;
-    }
-    const chosenStr = chosen.map(cardToStr);
-    const best = ds[0];
-    const mine = ds.find((d) => sameStrSet(d.throw, chosenStr)) ?? ds[ds.length - 1];
-    const delta = best.score - mine.score;
-    state.coachNote = delta < 0.05
-        ? { good: true, text: `✓ Best discard — threw ${chosen.map(lbl).join(' ')} (EV ${mine.score.toFixed(1)})` }
-        : { good: false, text: `Threw ${chosen.map(lbl).join(' ')} (EV ${mine.score.toFixed(1)}). Best: ${best.throw.map(slbl).join(' ')} (EV ${best.score.toFixed(1)}, +${delta.toFixed(1)})` };
-}
-function coachPlay(card) {
-    const ps = pendingAnalysis?.plays;
-    if (!ps || !ps.length) {
-        state.coachNote = null;
-        return;
-    }
-    const cs = cardToStr(card);
-    const best = ps[0];
-    const mine = ps.find((p) => p.card === cs) ?? ps[ps.length - 1];
-    const delta = best.score - mine.score;
-    state.coachNote = delta < 0.05
-        ? { good: true, text: `✓ Best play — ${lbl(card)}` }
-        : { good: false, text: `Played ${lbl(card)}. Best: ${slbl(best.card)} (net +${delta.toFixed(2)})` };
-}
-function discardAnalysisTable(ds) {
-    const panel = h('div', { class: 'analysis-panel' }, h('div', { class: 'analysis-title' }, 'Discard analysis — select 2 to throw'));
-    const table = h('table', { class: 'an-table' }, h('tr', {}, h('th', {}, ''), h('th', {}, 'keep'), h('th', {}, 'throw'), h('th', {}, 'EV'), h('th', {}, 'hand'), h('th', {}, 'crib')));
-    const selStr = state.selected.map(cardToStr);
-    ds.forEach((k, i) => {
-        const yours = selStr.length === 2 && sameStrSet(k.throw, selStr);
-        table.append(h('tr', { class: (i === 0 ? 'best ' : '') + (yours ? 'yours' : '') }, h('td', {}, i === 0 ? '★' : yours ? '◄' : ''), h('td', {}, k.keep.map(slbl).join(' ')), h('td', {}, k.throw.map(slbl).join(' ')), h('td', { class: 'num' }, k.score.toFixed(1)), h('td', { class: 'num' }, k.eHand.toFixed(1)), h('td', { class: 'num' }, sgn(k.crib))));
-    });
-    panel.append(table, h('div', { class: 'analysis-legend' }, h('b', {}, 'EV'), ' = Hand + Crib — the bot keeps the max. ', h('b', {}, 'Hand'), ' = average show points from your 4 kept cards over every possible starter. ', h('b', {}, 'Crib'), " = expected value of the 2 thrown cards in the crib, + when it's yours, − when it's the opponent's."));
-    return panel;
-}
-function playAnalysisTable(ps) {
-    const panel = h('div', { class: 'analysis-panel' }, h('div', { class: 'analysis-title' }, `Pegging analysis — count ${state.count}`));
-    const table = h('table', { class: 'an-table' }, h('tr', {}, h('th', {}, ''), h('th', {}, 'play'), h('th', {}, 'net'), h('th', {}, 'now'), h('th', {}, 'reply')));
-    ps.forEach((p, i) => {
-        table.append(h('tr', { class: i === 0 ? 'best' : '' }, h('td', {}, i === 0 ? '★' : ''), h('td', {}, slbl(p.card)), h('td', { class: 'num' }, sgn(p.score)), h('td', { class: 'num' }, p.now.toFixed(1)), h('td', { class: 'num' }, p.reply.toFixed(1))));
-    });
-    panel.append(table, h('div', { class: 'analysis-legend' }, h('b', {}, 'net'), ' = Now − Reply — the bot plays the max. ', h('b', {}, 'Now'), ' = points this card scores immediately. ', h('b', {}, 'Reply'), ' = expected points the opponent pegs back next.'));
-    return panel;
-}
 const sortHand = (cards) => [...cards].sort((a, b) => a.rank - b.rank || a.suit - b.suit);
 // ---------- scaffold ----------
 const app = document.getElementById('app');
 const elFelt = h('div', { class: 'felt' });
 const elControls = h('div', { class: 'controls' });
-const elAnalysis = h('div', { class: 'analysis' });
-const elCoach = h('div', { class: 'coach' });
 // Game-flow status ("waiting for Bob…", "opponent left"). It occupies the
 // action-control zone: when you're waiting you have no move, so the message
 // simply takes the button's place. That zone has a reserved min-height, so
@@ -130,31 +72,15 @@ function setStatus(text) {
     if (resolveDiscard || resolvePlay || resolveContinue) return;
     elControls.replaceChildren(text ? h('div', { class: 'status' }, text) : '');
 }
-const coachToggle = h('button', { class: 'coach-toggle' }, 'Coach: off');
-coachToggle.addEventListener('click', () => {
-    coachOn = !coachOn;
-    coachToggle.textContent = `Coach: ${coachOn ? 'on' : 'off'}`;
-    coachToggle.classList.toggle('on', coachOn);
-    if (!coachOn)
-        state.coachNote = null;
-    renderCoach();
-});
-const analysisToggle = h('button', { class: 'coach-toggle' }, 'Analysis: off');
-analysisToggle.addEventListener('click', () => {
-    analysisOn = !analysisOn;
-    analysisToggle.textContent = `Analysis: ${analysisOn ? 'on' : 'off'}`;
-    analysisToggle.classList.toggle('on', analysisOn);
-    renderAnalysis();
-});
 // Leave/quit: available throughout a game. In head-to-head it tells the server
 // (so the opponent is informed they left); then it returns to the home menu.
-const quitButton = h('button', { class: 'coach-toggle' }, 'Leave game');
+const quitButton = h('button', { class: 'quit-toggle' }, 'Leave game');
 quitButton.addEventListener('click', onQuit);
 // Masthead identity: who's signed in. Purely chrome — filled in by an out-of-band
 // GET /auth/me on load and hidden when logged out; it never touches game state.
 const mastheadUser = h('div', { class: 'masthead-user' });
 mastheadUser.style.display = 'none';
-app.append(h('div', { class: 'masthead' }, h('h1', {}, 'Cribbage'), h('div', { class: 'toggles' }, mastheadUser, analysisToggle, coachToggle, quitButton)), elFelt, elAnalysis, elCoach);
+app.append(h('div', { class: 'masthead' }, h('h1', {}, 'Cribbage'), h('div', { class: 'toggles' }, mastheadUser, quitButton)), elFelt);
 // Same-origin fetch carries the (HttpOnly) session cookie. We only call /auth/me
 // when the homepage cached that a session exists ('cribbager:authed' === '1'), so
 // guests — who never authenticate — don't fire a speculative 401 on every load.
@@ -174,36 +100,9 @@ app.append(h('div', { class: 'masthead' }, h('h1', {}, 'Cribbage'), h('div', { c
 })();
 
 // setChrome shows the right header controls for the current screen: Leave only
-// while in a game; Analysis/Coach only vs the bot (they expose the champion's
-// evaluation, which would be assistance against a human, so they're hidden — and
-// forced off — in head-to-head).
+// while in a game.
 function setChrome(mode) { // 'bot' | 'mp' | 'menu'
     quitButton.style.display = mode === 'menu' ? 'none' : '';
-    const tools = mode === 'bot';
-    analysisToggle.style.display = tools ? '' : 'none';
-    coachToggle.style.display = tools ? '' : 'none';
-    if (!tools) {
-        analysisOn = false; coachOn = false;
-        analysisToggle.textContent = 'Analysis: off'; analysisToggle.classList.remove('on');
-        coachToggle.textContent = 'Coach: off'; coachToggle.classList.remove('on');
-        state.coachNote = null; pendingAnalysis = null;
-        renderAnalysis(); renderCoach();
-    }
-}
-function renderCoach() {
-    if (!coachOn || !state.coachNote) {
-        elCoach.replaceChildren();
-        return;
-    }
-    elCoach.replaceChildren(h('div', { class: 'coach-note ' + (state.coachNote.good ? 'good' : 'bad') }, state.coachNote.text));
-}
-function renderAnalysis() {
-    if (analysisOn && state.discarding && pendingAnalysis?.phase === 'discard' && pendingAnalysis.discards)
-        elAnalysis.replaceChildren(discardAnalysisTable(pendingAnalysis.discards));
-    else if (analysisOn && state.legal && pendingAnalysis?.phase === 'play' && pendingAnalysis.plays)
-        elAnalysis.replaceChildren(playAnalysisTable(pendingAnalysis.plays));
-    else
-        elAnalysis.replaceChildren();
 }
 // elControls lives INSIDE the player area (appended to the you-seat in render()).
 // ---------- the board (reused module), mounted once ----------
@@ -331,8 +230,6 @@ function render() {
     const youRows = sh && sh.player === HUMAN ? showRows() : [peggingRow(HUMAN), youHand];
     const youSeat = h('div', { class: 'seat you' }, ...youRows, elControls);
     elFelt.replaceChildren(h('div', { class: 'table-inner' }, oppSeat, h('div', { class: 'board-area' }, h('div', { class: 'board-row' }, boardMount)), stageEl(), youSeat));
-    renderAnalysis();
-    renderCoach();
 }
 // ---------- interaction ----------
 let resolveDiscard = null;
@@ -353,8 +250,6 @@ function playCard(card) {
     const r = resolvePlay;
     resolvePlay = null;
     state.legal = null;
-    if (coachOn)
-        coachPlay(card);
     state.humanHand = state.humanHand.filter((c) => !cardsEqual(c, card));
     r(card);
 }
@@ -365,8 +260,6 @@ function confirmDiscard() {
     const r = resolveDiscard;
     resolveDiscard = null;
     state.discarding = false;
-    if (coachOn)
-        coachDiscard(chosen);
     state.humanHand = state.humanHand.filter((c) => !chosen.some((s) => cardsEqual(s, c)));
     state.selected = [];
     elControls.replaceChildren();
@@ -703,12 +596,10 @@ async function startGame() {
         if (snap.Winner != null) break;
         state.humanHand = CS(snap.YourHand);
         if (snap.Phase === 'discard' && snap.YourHand.length === 6) {
-            pendingAnalysis = await client.analysis(game_id, player_token);
             const chosen = await humanAgent.discard(discardViewFromSnap(snap));
             const resp = await client.act(game_id, player_token, { type: 'discard', cards: chosen.map(cardToStr) });
             await animate(resp.deltas, ctx);
         } else if (snap.Phase === 'play' && snap.ToPlay === MY_SEAT) {
-            pendingAnalysis = await client.analysis(game_id, player_token);
             const chosen = await humanAgent.play(playViewFromSnap(snap));
             const resp = await client.act(game_id, player_token, { type: 'play', card: cardToStr(chosen) });
             await animate(resp.deltas, ctx);
@@ -781,8 +672,6 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
         // dealer). The roster delta can trigger a pump before the game deltas arrive.
         if (appliedSeq < snap.Version) return false;
         state.humanHand = CS(snap.YourHand);
-        // No Analysis/Coach fetch in head-to-head — the champion's evaluation would
-        // be assistance against a human (and the panels are hidden, see setChrome).
         if (snap.Phase === 'discard' && snap.YourHand.length === 6) {
             setStatus(null);
             const chosen = await humanAgent.discard(discardViewFromSnap(snap));
