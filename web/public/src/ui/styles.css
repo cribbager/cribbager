@@ -131,15 +131,68 @@ html, body {
 
 :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
 
+/* ============================================================================
+   Global site header (U1) — appears on every page above the page content.
+   Token-built; it never sets the page width, so the game board layout is
+   unaffected (the board sizes to #app, which the header sits above).
+   ============================================================================ */
+.site-header { background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+.site-header-inner {
+  max-width: 880px; margin: 0 auto; padding: var(--space-2) var(--space-4);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+}
+.site-wordmark {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--text-xl);
+  letter-spacing: 0.2px; color: var(--color-ink); text-decoration: none;
+}
+.site-wordmark:hover { color: var(--color-accent); }
+.site-header-right { display: flex; align-items: center; gap: var(--space-2); }
+/* Compact the header buttons a touch relative to the page .btn default. */
+.site-header-right .btn { padding: var(--space-2) var(--space-4); font-size: var(--text-sm); }
+
+/* signed-in account menu */
+.site-menu-wrap { position: relative; }
+.site-menu-trigger {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font: inherit; font-weight: 700; font-size: var(--text-sm);
+  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-ink);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-pill); cursor: pointer; box-shadow: var(--shadow);
+}
+.site-menu-caret { color: var(--color-ink-muted); font-size: var(--text-xs); }
+.site-menu {
+  position: absolute; right: 0; top: calc(100% + var(--space-2)); z-index: 20; min-width: 180px;
+  display: flex; flex-direction: column; padding: var(--space-1);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius); box-shadow: var(--shadow-modal);
+}
+.site-menu[hidden] { display: none; }
+.site-menu-item {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: var(--text-sm);
+  background: none; border: 0; border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3);
+  color: var(--color-ink); text-decoration: none; cursor: pointer;
+}
+.site-menu-item:hover:not(.is-disabled) { background: var(--color-felt); }
+.site-menu-item.is-disabled { color: var(--color-ink-muted); cursor: default; }
+
+/* auth modal (login / signup / reset) — built on the .modal primitive */
+.auth-modal { position: relative; text-align: left; min-width: 300px; max-width: 360px; }
+.auth-modal-title { margin: 0 0 var(--space-3); font-size: var(--text-xl); }
+.auth-modal-close {
+  position: absolute; top: var(--space-3); right: var(--space-3); width: 30px; height: 30px;
+  display: grid; place-items: center; font-size: var(--text-lg); line-height: 1;
+  background: none; border: 0; border-radius: var(--radius-sm); color: var(--color-ink-muted); cursor: pointer;
+}
+.auth-modal-close:hover { background: var(--color-felt); color: var(--color-ink); }
+.auth-form { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.auth-form .btn { margin-top: var(--space-1); }
+.auth-modal .home-auth-toggle { display: inline-block; margin-right: var(--space-3); margin-top: var(--space-1); }
+
 /* masthead */
 .masthead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .masthead h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; font-weight: 800; }
 .toggles { display: flex; gap: 8px; align-self: center; }
 .quit-toggle { padding: 6px 14px; font-size: 13px; font-weight: 700; border: 1px solid var(--line);
   background: var(--panel); color: var(--muted); border-radius: var(--radius-pill); cursor: pointer; box-shadow: var(--shadow); }
-/* signed-in identity in the masthead, sitting alongside the toggles */
-.masthead-user { font-size: 12px; color: var(--muted); align-self: center; white-space: nowrap; }
-.masthead-user b { color: var(--ink); font-weight: 700; }
 
 /* felt / table */
 .felt {
@@ -345,6 +398,8 @@ button:active { transform: translateY(1px); }
   .home-auth-form button { width: 100%; }
   .home-actions { flex-wrap: wrap; }
   .home-actions button { flex: 1 1 140px; }
+  .site-header-inner { padding: var(--space-2) var(--space-3); }
+  .site-header-right .btn { padding: var(--space-2) var(--space-3); }
 }
 @media (prefers-reduced-motion: reduce) {
   .card, .peg { transition: none !important; }
