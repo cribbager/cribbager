@@ -520,6 +520,17 @@ button:active { transform: translateY(1px); }
   color: var(--color-ink-muted); font-weight: 700; }
 .replay-count strong { color: var(--color-ink); font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
 
+/* A4: the engine's discard-verdict overlay for the graded seat (the viewing
+   user), shown above the felt and reusing analyze.js's chips/badges/lines. */
+.replay-verdict-wrap { margin-bottom: var(--space-4); }
+.replay-verdict { padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
+.replay-verdict.is-optimal { border-color: var(--color-success-border); }
+.replay-verdict-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-1); }
+.replay-verdict-who { font-weight: 800; color: var(--color-ink); }
+.replay-verdict-crib { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700; color: var(--color-ink-muted); }
+.replay-verdict .an-badge { margin-left: auto; }
+
 /* === Discard trainer (A5) — a standalone practice page ====================== */
 #practice { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4); }
 .pr-title { margin: 0 0 var(--space-1); font-size: var(--text-2xl); font-weight: 800; }
