@@ -332,6 +332,8 @@ button:active { transform: translateY(1px); }
   overflow: hidden; text-overflow: ellipsis; }
 .home-history-score { flex: none; font-variant-numeric: tabular-nums; color: var(--ink); }
 .home-history-date { flex: none; color: var(--muted); font-size: 12px; min-width: 56px; text-align: right; }
+.home-history-analyze { flex: none; color: var(--btn); font-weight: 700; text-decoration: none; font-size: 12.5px; }
+.home-history-analyze:hover { text-decoration: underline; }
 
 /* homepage account bar */
 .home-auth { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px;
@@ -402,3 +404,52 @@ button:active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
   .card, .peg { transition: none !important; }
 }
+
+/* ============================================================================
+   Post-game discard analysis view (A8) — analyze.html / analyze.js.
+   A read-only verdict list; token-built, consistent with the rest of the app.
+   ============================================================================ */
+#analyze { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
+.an-title { margin: 0 0 var(--space-1); font-size: var(--text-2xl); font-weight: 800; }
+.an-subtitle { margin: 0 0 var(--space-4); color: var(--color-ink-muted); }
+.an-summary { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-5); }
+.an-summary-main { font-size: var(--text-xl); font-weight: 800; color: var(--color-ink); }
+.an-summary-sub { color: var(--color-ink-muted); font-weight: 600; }
+
+.an-hands { display: flex; flex-direction: column; gap: var(--space-3); }
+.an-hand { padding: var(--space-4); }
+.an-hand.is-optimal { border-color: var(--color-success-border); }
+.an-hand-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.an-hand-no { font-weight: 800; color: var(--color-ink); }
+.an-crib { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;
+  color: var(--color-ink-muted); background: var(--color-surface-tag); border-radius: var(--radius-pill);
+  padding: 2px 10px; }
+.an-badge { margin-left: auto; font-size: var(--text-sm); font-weight: 800; border-radius: var(--radius-pill);
+  padding: 3px 11px; }
+.an-badge.ok { color: var(--color-success); background: var(--color-success-bg); border: 1px solid var(--color-success-border); }
+.an-badge.off { color: var(--color-danger-ink); background: var(--color-danger-bg); border: 1px solid var(--color-danger-border);
+  font-variant-numeric: tabular-nums; }
+
+.an-hand-cards { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
+/* Thrown cards in the dealt six are dimmed; kept cards stay full-strength. */
+.an-hand-cards .card.an-thrown { opacity: 0.42; }
+
+.an-line { font-size: var(--text-md); color: var(--color-ink); line-height: 1.7; }
+.an-line-engine { color: var(--color-ink-soft); margin-top: var(--space-1); }
+.an-line-label { font-weight: 700; }
+.an-line-sep { color: var(--color-ink-muted); }
+.an-ev { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+/* Compact suit-coloured rank+suit chip used inline in the verdict sentences. */
+.an-chip { display: inline-block; font-weight: 800; font-variant-numeric: tabular-nums;
+  padding: 0 3px; margin: 0 1px; }
+.an-chip.red { color: var(--color-card-red); }
+.an-chip.black { color: var(--color-ink); }
+
+.an-message { text-align: center; max-width: 480px; margin: var(--space-5) auto 0; }
+.an-message-title { font-size: var(--text-lg); font-weight: 800; margin: 0 0 var(--space-2); color: var(--color-ink); }
+.an-message-body { color: var(--color-ink-muted); margin: 0 0 var(--space-3); }
+
+/* "Analyze this game" link under the game-over overlay buttons. */
+.end-analyze { display: inline-block; margin-top: 14px; color: var(--btn); font-weight: 700; text-decoration: none; }
+.end-analyze:hover { text-decoration: underline; }
