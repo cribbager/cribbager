@@ -217,6 +217,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /auth/password/reset-request", s.handlePasswordResetRequest)
 	mux.HandleFunc("POST /auth/password/reset", s.handlePasswordReset)
 	mux.HandleFunc("GET /users/me/games", s.handleUserGames)
+	mux.HandleFunc("GET /users/me/games/{id}/analysis", s.handleGameAnalysis)
 	mux.HandleFunc("POST /games", s.handleCreate)
 	mux.HandleFunc("POST /games/{id}/join", s.handleJoin)
 	mux.HandleFunc("GET /games/{id}", s.handleSnapshot)

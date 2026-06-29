@@ -42,6 +42,9 @@ type ResultStore interface {
 	// ResultsForPlayer returns a player's most recent games (newest first), up to
 	// limit. Events is omitted (summaries only) to keep the list cheap.
 	ResultsForPlayer(playerID string, limit int) ([]Result, error)
+	// ResultByID returns one finished game by id, including its full Events log
+	// (for post-game replay/analysis). ok=false if no such game exists.
+	ResultByID(id string) (r Result, ok bool, err error)
 	// PlayerStats returns the player's total games and wins.
 	PlayerStats(playerID string) (total, wins int, err error)
 }
@@ -85,6 +88,15 @@ func (m *MemResultStore) ResultsForPlayer(playerID string, limit int) ([]Result,
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+// ResultByID returns the stored game by id with its full event log intact (the
+// per-player list path strips Events; this one keeps them for analysis/replay).
+func (m *MemResultStore) ResultByID(id string) (Result, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.results[id]
+	return r, ok, nil
 }
 
 func (m *MemResultStore) PlayerStats(playerID string) (total, wins int, err error) {
