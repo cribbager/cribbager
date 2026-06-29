@@ -140,8 +140,14 @@ export function mountHeader({ onAuthChange } = {}) {
     const notify = () => { if (onAuthChange) onAuthChange(currentUser); };
 
     const right = h('div', { class: 'site-header-right' });
+    // Tools nav, available to everyone (no auth): the discard trainer is a
+    // dedicated learning surface, where analysis/teaching belongs.
+    const nav = h('nav', { class: 'site-nav', 'aria-label': 'Tools' },
+        h('a', { class: 'site-nav-link', href: '/practice.html' }, 'Practice'),
+    );
     const inner = h('div', { class: 'site-header-inner' },
         h('a', { class: 'site-wordmark', href: '/' }, 'Cribbager'),
+        nav,
         right,
     );
     host.replaceChildren(inner);

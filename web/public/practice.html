@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Discard trainer · Cribbager</title>
+    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <link rel="icon" href="data:," />
+    <!-- cardFace.css: the trainer renders real card faces for the dealt hand. -->
+    <link rel="stylesheet" href="/src/ui/cardFace.css" />
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <!-- Global site header (wordmark + Tools nav + auth/identity), mounted by header.js. -->
+    <header id="site-header"></header>
+    <!-- Standalone discard practice tool (no game, no auth). -->
+    <div id="practice"></div>
+    <script type="module" src="/src/ui/practice.js"></script>
+  </body>
+</html>

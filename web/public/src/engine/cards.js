@@ -15,6 +15,15 @@ export function cardsEqual(a, b) {
 const SUIT_LETTERS = { c: 0, d: 1, h: 2, s: 3 };
 const NAMED_RANKS = { a: 1, t: 10, j: 11, q: 12, k: 13 };
 
+// Rank letters in the compact wire notation the Go engine parses: ten is "T"
+// (not "10"), so this is the inverse of parseCard for serialization, not display.
+const RANK_CODES = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'];
+
+/** Serialize a {rank, suit} card to the engine's two-char form, e.g. "5H", "TD". */
+export function cardCode(card) {
+    return RANK_CODES[card.rank] + 'CDHS'[card.suit];
+}
+
 /** Parse shorthand like "5H", "10d", "TD", "AC", "Js" into a {rank, suit} card. */
 export function parseCard(s) {
     const t = s.trim().toLowerCase();
