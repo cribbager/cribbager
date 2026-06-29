@@ -107,6 +107,42 @@ func (p *PgResultStore) ResultsForPlayer(playerID string, limit int) ([]Result, 
 	return out, rows.Err()
 }
 
+// ResultByID loads one finished game by id, decoding the gob-encoded event log
+// (and version metadata) so the post-game analysis can replay it. ok=false maps
+// the no-rows case to a clean miss rather than an error.
+func (p *PgResultStore) ResultByID(id string) (Result, bool, error) {
+	ctx, cancel := dbCtx()
+	defer cancel()
+	var r Result
+	var p0, p1 sql.NullString
+	var events, meta []byte
+	err := p.db.QueryRowContext(ctx, `
+		SELECT id, player_id_0, player_id_1, name_0, name_1, score_0, score_1, winner, events, ended_at, meta
+		FROM results
+		WHERE id = $1`, id).Scan(&r.ID, &p0, &p1, &r.Names[0], &r.Names[1],
+		&r.Scores[0], &r.Scores[1], &r.Winner, &events, &r.EndedAt, &meta)
+	if err == sql.ErrNoRows {
+		return Result{}, false, nil
+	}
+	if err != nil {
+		return Result{}, false, err
+	}
+	r.PlayerIDs[0], r.PlayerIDs[1] = p0.String, p1.String
+	if len(events) > 0 {
+		if err := gob.NewDecoder(bytes.NewReader(events)).Decode(&r.Events); err != nil {
+			return Result{}, false, err
+		}
+	}
+	if len(meta) > 0 { // NULL for rows written before the meta column existed
+		var m resultMeta
+		if err := gob.NewDecoder(bytes.NewReader(meta)).Decode(&m); err != nil {
+			return Result{}, false, err
+		}
+		r.EngineVersion, r.Bots = m.EngineVersion, m.Bots
+	}
+	return r, true, nil
+}
+
 func (p *PgResultStore) PlayerStats(playerID string) (total, wins int, err error) {
 	ctx, cancel := dbCtx()
 	defer cancel()
