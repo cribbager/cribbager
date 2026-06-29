@@ -8,17 +8,28 @@ import (
 	"github.com/cribbager/cribbager/internal/game"
 )
 
+// BotInfo records which bot played a seat, so a stored game's replay/analysis
+// knows the exact opponent. The zero value (empty Name) means a human seat.
+type BotInfo struct {
+	Name    string // bot role/name, e.g. "champion"
+	Version string // bot algorithm version that played
+}
+
 // Result is a completed game's permanent record. Written once on game-over and
 // never reaped (unlike the live game in Store). PlayerIDs are "" for guest seats.
 // Events is the full move log — kept for replay; the history list omits it.
+// EngineVersion and Bots capture the code versions that produced the game, so a
+// later replay/analysis knows which engine and bot(s) played it.
 type Result struct {
-	ID        string
-	PlayerIDs [2]string
-	Names     [2]string
-	Scores    [2]int
-	Winner    int // winning seat (0 or 1)
-	Events    []game.Event
-	EndedAt   time.Time
+	ID            string
+	PlayerIDs     [2]string
+	Names         [2]string
+	Scores        [2]int
+	Winner        int // winning seat (0 or 1)
+	Events        []game.Event
+	EndedAt       time.Time
+	EngineVersion string     // game engine code version (game.EngineVersion)
+	Bots          [2]BotInfo // per-seat bot info; zero value for a human seat
 }
 
 // ResultStore is the durable record of finished games, keyed for per-player

@@ -14,6 +14,10 @@ import (
 // Bot chooses moves for one seat from that seat's view.
 type Bot interface {
 	Name() string
+	// Version is the bot's algorithm version, recorded with each finished game
+	// so a later replay/analysis knows which bot played it. Different bots report
+	// different versions; a bot bumps its own when its logic changes.
+	Version() string
 	Discard(v game.PlayerView) [2]cribbage.Card
 	Play(v game.PlayerView) cribbage.Card
 }
@@ -23,6 +27,10 @@ type Bot interface {
 // champion"), deliberately not tied to the current algorithm, so the
 // implementation can change without the name rippling through callers.
 const DefaultName = "champion"
+
+// Version is the shipped (champion) bot's algorithm version. Bump it whenever the
+// champion's logic changes, so finished games record which bot version played them.
+const Version = "1"
 
 // Names lists the production bots: the champion (the default opponent) and the
 // legal-random baseline, kept as the evaluator's noise floor and the engine's

@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/cribbager/cribbager/internal/game"
 )
 
 // recordResult writes a finished game to the permanent result store. It runs on
@@ -19,14 +21,22 @@ func (s *Server) recordResult(sess *session) {
 	if sess.playerIDs[0] == "" && sess.playerIDs[1] == "" {
 		return
 	}
+	var bots [2]BotInfo
+	for seat := range sess.bots {
+		if b := sess.bots[seat]; b != nil {
+			bots[seat] = BotInfo{Name: b.Name(), Version: b.Version()}
+		}
+	}
 	res := Result{
-		ID:        sess.id,
-		PlayerIDs: sess.playerIDs,
-		Names:     sess.names,
-		Scores:    sess.game.Scores(),
-		Winner:    int(winner),
-		Events:    sess.game.Snapshot().Log,
-		EndedAt:   s.now(),
+		ID:            sess.id,
+		PlayerIDs:     sess.playerIDs,
+		Names:         sess.names,
+		Scores:        sess.game.Scores(),
+		Winner:        int(winner),
+		Events:        sess.game.Snapshot().Log,
+		EndedAt:       s.now(),
+		EngineVersion: game.EngineVersion,
+		Bots:          bots,
 	}
 	if err := saveResultRetrying(s.results, res, time.Sleep); err != nil {
 		log.Printf("save result %s: giving up: %v", sess.id, err)
