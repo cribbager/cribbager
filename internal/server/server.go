@@ -77,19 +77,34 @@ type Server struct {
 
 	// statsToken, when non-empty, gates GET /stats behind a bearer token so live
 	// occupancy isn't exposed publicly. Empty (default) leaves /stats open for dev.
+	// The same token also gates GET /metrics.
 	statsToken string
+
+	// startTime is when the server was constructed; GET /metrics reports process
+	// uptime as now - startTime.
+	startTime time.Time
+
+	// HTTP request counters by response status class, incremented in logRequests
+	// for every completed request and exposed via GET /metrics. Atomic because the
+	// server serves concurrent requests.
+	reqs2xx   atomic.Int64
+	reqs3xx   atomic.Int64
+	reqs4xx   atomic.Int64
+	reqs5xx   atomic.Int64
+	reqsOther atomic.Int64
 }
 
 // New builds a server with an empty session registry and no durable store.
 func New() *Server {
 	s := &Server{
-		reg:      newRegistry(),
-		now:      time.Now,
-		shutdown: make(chan struct{}),
-		store:    NoopStore{},
-		results:  NewMemResultStore(),
-		auth:     NewMemAuthStore(),
-		emailer:  LogEmailer{},
+		reg:       newRegistry(),
+		now:       time.Now,
+		shutdown:  make(chan struct{}),
+		store:     NoopStore{},
+		results:   NewMemResultStore(),
+		auth:      NewMemAuthStore(),
+		emailer:   LogEmailer{},
+		startTime: time.Now(),
 	}
 	// Limiters read the clock through s.now so tests can drive time.
 	nowFn := func() time.Time { return s.now() }
@@ -194,6 +209,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("GET /readyz", s.handleReady)
 	mux.HandleFunc("GET /stats", s.handleStats)
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("POST /auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
@@ -213,7 +229,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	// logRequests is the outermost wrapper so it observes the final status (after
 	// recoverPanics may have written a 500) and the full request lifetime.
-	return logRequests(recoverPanics(mux))
+	return s.logRequests(recoverPanics(mux))
 }
 
 // statusRecorder wraps an http.ResponseWriter to capture the status code for
@@ -241,14 +257,34 @@ func (r *statusRecorder) Flush() {
 
 // logRequests logs one line per completed request: method, path, status, and
 // duration in ms. The long-lived SSE request logs once when it closes, with its
-// lifetime as the duration — that's expected.
-func logRequests(next http.Handler) http.Handler {
+// lifetime as the duration — that's expected. It also tallies the response status
+// into the per-class counters exposed via GET /metrics.
+func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
+		s.countStatus(rec.status)
 		log.Printf("%s %s %d %dms", r.Method, r.URL.Path, rec.status, time.Since(start).Milliseconds())
 	})
+}
+
+// countStatus increments the request counter for the response's status class.
+// Anything outside 2xx–5xx (e.g. a 1xx) lands in the "other" bucket so the total
+// across all buckets always equals the number of requests handled.
+func (s *Server) countStatus(code int) {
+	switch {
+	case code >= 200 && code < 300:
+		s.reqs2xx.Add(1)
+	case code >= 300 && code < 400:
+		s.reqs3xx.Add(1)
+	case code >= 400 && code < 500:
+		s.reqs4xx.Add(1)
+	case code >= 500:
+		s.reqs5xx.Add(1)
+	default:
+		s.reqsOther.Add(1)
+	}
 }
 
 // handleStats reports counts only — the number of live games and live SSE

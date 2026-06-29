@@ -113,7 +113,7 @@ All set via `fly secrets set` (or local env). Non-secret toggles live in `fly.to
 | `SECURE_COOKIES` | Set (e.g. `1`) behind https so session cookies carry the `Secure` flag. In `fly.toml`. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Reset-email transport. Unset → links are logged only. |
 | `BASE_URL` | External origin for emailed links, e.g. `https://cribbager.org`. Unset → derived from the request (honoring `X-Forwarded-Proto`). |
-| `STATS_TOKEN` | If set, gates `GET /stats` behind this bearer token. Unset → `/stats` is open. |
+| `STATS_TOKEN` | If set, gates `GET /stats` **and `GET /metrics`** behind this bearer token. Unset → both are open. |
 | `GOMEMLIMIT` | Soft heap ceiling. Set to `220MiB` in `fly.toml` for the 256 MB machine. |
 | `ADDR` / `WEB` | Listen address / static dir (mostly for dev). |
 
@@ -123,8 +123,64 @@ All set via `fly secrets set` (or local env). Non-secret toggles live in `fly.to
 - `GET /readyz` — readiness; pings the database. Use it for a post-deploy check; it is
   deliberately *not* the liveness probe, so a transient DB blip doesn't restart the app.
 - `GET /stats` — `{"games": N, "subscribers": M}` (gate with `STATS_TOKEN`).
+- `GET /metrics` — Prometheus text-format metrics (gated by the same `STATS_TOKEN`).
 
 Active game/subscriber counts are also logged each reap cycle.
+
+### Metrics (`GET /metrics`)
+
+Hand-written Prometheus exposition (no `client_golang` dependency — the format is
+trivial and the project keeps deps minimal). Gate it in production with
+`STATS_TOKEN`; scrape it with the same bearer token.
+
+| metric | type | meaning |
+| --- | --- | --- |
+| `cribbager_http_requests_total{class=…}` | counter | Requests handled, labeled by status class (`2xx`/`3xx`/`4xx`/`5xx`/`other`). Low cardinality — no raw paths or game ids. |
+| `cribbager_games_live` | gauge | Live game sessions in memory. |
+| `cribbager_sse_subscribers` | gauge | Live SSE stream subscribers. |
+| `cribbager_uptime_seconds` | gauge | Process uptime. |
+| `go_goroutines` | gauge | Current goroutine count. |
+| `go_memstats_heap_alloc_bytes` | gauge | Allocated heap bytes. |
+| `go_memstats_sys_bytes` | gauge | Bytes obtained from the OS. |
+| `go_memstats_gc_total` | counter | Completed GC cycles. |
+
+### Alerting
+
+Fly does not alert on app metrics out of the box — alert rules are infra config
+that lives wherever you scrape from (Fly's managed Prometheus + Grafana, or your
+own). The two alerts worth wiring:
+
+**1. Elevated 5xx rate.** Fires when more than ~5% of responses are 5xx over 5
+minutes (server-side errors the recover middleware turned into 500s, or capacity
+503s). Prometheus rule:
+
+```yaml
+- alert: HighHTTP5xxRate
+  expr: |
+    sum(rate(cribbager_http_requests_total{class="5xx"}[5m]))
+      / clamp_min(sum(rate(cribbager_http_requests_total[5m])), 1)
+      > 0.05
+  for: 5m
+  labels: { severity: page }
+  annotations:
+    summary: "Cribbager 5xx rate above 5% for 5m"
+```
+
+**2. High memory.** The machine has 256 MB and `GOMEMLIMIT=220MiB`. Prefer Fly's
+own machine-memory metric (`fly_instance_memory_mem_total` / `…_available` via the
+Fly metrics integration) so you catch the *whole* process RSS, not just the Go
+heap. As an app-side proxy, alert when Go's reported system memory crosses ~200 MB:
+
+```yaml
+- alert: HighMemory
+  expr: go_memstats_sys_bytes > 200e6
+  for: 10m
+  labels: { severity: page }
+  annotations:
+    summary: "Cribbager Go runtime memory above 200 MB (256 MB machine)"
+```
+
+Tune the thresholds to real traffic before promoting either to a page.
 
 ## Governance (todo)
 

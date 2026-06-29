@@ -1076,7 +1076,7 @@ func TestLogRequestsLine(t *testing.T) {
 	log.SetOutput(&buf)
 	defer log.SetOutput(old)
 
-	h := logRequests(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	h := New().logRequests(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	}))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/games/abc", nil))
