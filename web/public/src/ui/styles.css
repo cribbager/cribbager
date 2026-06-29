@@ -325,6 +325,20 @@ button:active { transform: translateY(1px); }
 .home-forget { padding: 4px 11px; font-size: 13px; }
 .gameid { font-family: var(--font-mono); font-size: 12px; color: var(--ink); word-break: break-all; }
 
+/* Lobby — public open games waiting for a joiner. A .panel below the home card,
+   matched to its width; rows reuse the same spacing/divider feel as the
+   in-progress list. */
+.home-lobby { max-width: 440px; margin: var(--space-4) auto 0; padding: var(--space-5); }
+.home-lobby-list { margin-top: var(--space-1); }
+.home-lobby-empty { color: var(--muted); font-weight: 600; padding: var(--space-2) 0; }
+.home-lobby-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: 9px 0; border-top: 1px solid var(--line); }
+.home-lobby-row:first-child { border-top: 0; }
+.home-lobby-meta { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.home-lobby-host { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-lobby-age { color: var(--muted); font-size: 12px; flex: none; }
+.home-lobby-join { padding: 6px 16px; font-size: 13px; }
+
 /* Completed-game history ("Your games"), shown when signed in. */
 .home-history { margin-top: 22px; }
 .home-history:empty { display: none; }

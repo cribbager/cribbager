@@ -799,11 +799,15 @@ function endOverlay(title, sub, primaryLabel, onPrimary, extra) {
     document.body.append(overlay);
 }
 
-async function hostGame(name) {
+// hostGame opens an `open` game and seats the host as the waiting host. When
+// `isPublic` is true (the home page's "Create a game") it's created with
+// public:true, so the server lists it in the lobby for anyone to join; otherwise
+// ("Challenge a friend") it stays private — reachable only by its shareable link.
+async function hostGame(name, isPublic = false) {
     state = fresh(); board.reset(); clearControls(); render();
     setChrome('mp');
     setStatus('Waiting for your opponent to join…');
-    const created = await client.create({ mode: 'open', name });
+    const created = await client.create({ mode: 'open', name, public: isPublic });
     const { game_id, player_token } = created;
     history.replaceState(null, '', `?game=${game_id}`); // this game lives at its own URL
     // The game id IS the join credential now: share the link or just the id.
@@ -813,8 +817,13 @@ async function hostGame(name) {
     linkBox.addEventListener('focus', () => linkBox.select());
     const copy = h('button', { class: 'primary' }, 'Copy link');
     copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(link); copy.textContent = 'Copied!'; } catch { linkBox.focus(); } });
-    const ov = modalOverlay(h('h2', {}, 'Invite a friend'),
-        h('p', {}, 'Send this link, or share the game ID below — any client can join with it. The game begins when they join.'),
+    // A public game also waits in the lobby, so the copy/share is optional; a
+    // private game can only be reached by this link, so the copy is the point.
+    const intro = isPublic
+        ? 'Your game is listed in the lobby — anyone can join. You can also share this link to invite someone directly. The game begins when they join.'
+        : 'Send this link, or share the game ID below — any client can join with it. The game begins when they join.';
+    const ov = modalOverlay(h('h2', {}, isPublic ? 'Waiting for a player' : 'Challenge a friend'),
+        h('p', {}, intro),
         linkBox, h('p', { class: 'gameid' }, 'Game ID: ' + game_id), copy);
     startMultiplayer(game_id, player_token, 0, { onBothConnected: () => ov.remove(), name }); // dismiss once they connect
 }
@@ -846,7 +855,9 @@ function boot() {
     const params = new URLSearchParams(location.search);
     const newMode = params.get('new');
     if (newMode === 'bot') { startGame(); return; }
-    if (newMode === 'open') { hostGame(params.get('name') || ''); return; }
+    // ?public=1 (from the home page's "Create a game") hosts a PUBLIC open game
+    // that lists in the lobby; without it ("Challenge a friend") it stays private.
+    if (newMode === 'open') { hostGame(params.get('name') || '', params.get('public') === '1'); return; }
     const join = params.get('join'); // a game id to join (or resume, if it's already ours)
     if (join) {
         const mine = loadGame(join);
