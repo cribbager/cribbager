@@ -10,6 +10,10 @@
     <link rel="stylesheet" href="/src/ui/styles.css" />
   </head>
   <body>
+    <!-- Global site header (wordmark + auth/identity), mounted by header.js. It
+         sits above #app and never sets the page width, so the board layout is
+         unaffected. -->
+    <header id="site-header"></header>
     <div id="app"></div>
     <!-- No build step: the browser loads the ES modules directly, served by the Go server. -->
     <script type="module" src="/src/ui/main.js"></script>

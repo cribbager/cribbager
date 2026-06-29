@@ -9,6 +9,7 @@ import { createBoard, straightBoard } from '../board/board.js';
 import { cardsEqual, parseCard } from '../engine/cards.js';
 import { cardFace } from './cardFace.js';
 import { GameClient } from '../net/client.js';
+import { mountHeader } from './header.js';
 // HUMAN/BOT are UI positions: "me" at the bottom, the opponent at the top.
 const HUMAN = 0;
 const BOT = 1;
@@ -76,28 +77,12 @@ function setStatus(text) {
 // (so the opponent is informed they left); then it returns to the home menu.
 const quitButton = h('button', { class: 'quit-toggle' }, 'Leave game');
 quitButton.addEventListener('click', onQuit);
-// Masthead identity: who's signed in. Purely chrome — filled in by an out-of-band
-// GET /auth/me on load and hidden when logged out; it never touches game state.
-const mastheadUser = h('div', { class: 'masthead-user' });
-mastheadUser.style.display = 'none';
-app.append(h('div', { class: 'masthead' }, h('h1', {}, 'Cribbage'), h('div', { class: 'toggles' }, mastheadUser, quitButton)), elFelt);
-// Same-origin fetch carries the (HttpOnly) session cookie. We only call /auth/me
-// when the homepage cached that a session exists ('cribbager:authed' === '1'), so
-// guests — who never authenticate — don't fire a speculative 401 on every load.
-(async () => {
-    let authed = '0';
-    try { authed = localStorage.getItem('cribbager:authed') || '0'; } catch { /* private mode */ }
-    if (authed !== '1') return;
-    try {
-        const r = await fetch('/auth/me');
-        if (!r.ok) { try { localStorage.setItem('cribbager:authed', '0'); } catch { /* ignore */ } return; }
-        const u = await r.json();
-        const name = u && (u.display_name || u.username);
-        if (!name) return;
-        mastheadUser.replaceChildren('Signed in as ', h('b', {}, name));
-        mastheadUser.style.display = '';
-    } catch { /* offline — leave the chrome empty */ }
-})();
+// The signed-in identity now lives in the global site header (mounted below); the
+// game masthead only carries the game-specific Leave control.
+app.append(h('div', { class: 'masthead' }, h('h1', {}, 'Cribbage'), h('div', { class: 'toggles' }, quitButton)), elFelt);
+// Mount the global site header (wordmark + auth/identity). It sits above #app and
+// never sets the page width, so the board layout is unaffected.
+mountHeader();
 
 // setChrome shows the right header controls for the current screen: Leave only
 // while in a game.

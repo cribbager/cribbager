@@ -3,6 +3,8 @@
 // success it links back to the homepage to log in; on failure it shows the error.
 // Standalone and tiny — it carries its own little h().
 
+import { mountHeader } from './header.js';
+
 function h(tag, attrs = {}, ...kids) {
     const e = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -74,4 +76,5 @@ function card() {
     );
 }
 
+mountHeader();
 render();

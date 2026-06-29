@@ -3,6 +3,8 @@
 // progress. Each game lives on its own /game.html?game=<id> URL; this page reads
 // the in-progress list straight from localStorage. This is the seed of a lobby.
 
+import { mountHeader } from './header.js';
+
 // In-progress games are persisted by the game page under this key, as a map of
 // { [gameId]: { token, seat, name, opp } }. We only read/forget here.
 const SAVE_KEY = 'cribbager:games';
@@ -72,112 +74,14 @@ function renderGames() {
 }
 
 // ---- accounts (optional; guests can still play without one) ----
-// Same-origin fetch sends the session cookie automatically.
-// AUTHED_KEY caches whether a session exists, so the game page (where the session
-// cookie is HttpOnly and unreadable from JS) can decide whether to call /auth/me
-// at all — avoiding a speculative 401 on every game load for guests.
-const AUTHED_KEY = 'cribbager:authed';
-const setAuthed = (v) => { try { localStorage.setItem(AUTHED_KEY, v ? '1' : '0'); } catch { /* private mode */ } };
-async function authMe() {
-    try { const r = await fetch('/auth/me'); const ok = r.ok; setAuthed(ok); return ok ? await r.json() : null; } catch { return null; }
-}
-async function authPost(path, body) {
-    const r = await fetch(path, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-    return data;
-}
-
-// withInflight disables a submit button and shows a "Working…" state while an async
-// action runs, so a double-click can't fire two requests; it restores the button's
-// label and enabled state afterwards (whether the action resolved or threw).
-async function withInflight(btn, fn) {
-    const label = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Working…';
-    try { await fn(); }
-    finally { btn.disabled = false; btn.textContent = label; }
-}
-
+// Identity and the login/signup/forgot-password flows now live in the global site
+// header (header.js). The home page only reacts to the resulting auth state: it
+// hides the redundant per-game name field when signed in and (re)loads the "Your
+// games" history. currentUser is fed by the header's onAuthChange callback.
 let currentUser = null;
-let signupMode = false;
-let resetMode = false; // showing the "forgot password" reset-request view
-const authBar = h('div', { class: 'home-auth' });
-
-// renderResetRequest shows the email-only "send me a reset link" view. The
-// response is always generic (the server never reveals whether the email exists),
-// so we show the same confirmation regardless and a link back to log in.
-function renderResetRequest() {
-    authBar.replaceChildren();
-    const err = h('div', { class: 'home-auth-err', role: 'alert' });
-    const note = h('div', { class: 'home-auth-note', role: 'status' });
-    const email = h('input', { type: 'email', placeholder: 'Your account email', class: 'home-input', autocomplete: 'email', 'aria-label': 'Account email' });
-    const submit = h('button', { class: 'primary', type: 'submit' }, 'Send reset link');
-    const form = h('form', { class: 'home-auth-form' }, email, submit);
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        err.textContent = '';
-        note.textContent = '';
-        withInflight(submit, async () => {
-            try {
-                const data = await authPost('/auth/password/reset-request', { email: email.value.trim() });
-                note.textContent = data.message || 'If that email exists, a reset link was sent.';
-            } catch (e) {
-                err.textContent = e.message;
-            }
-        });
-    });
-    const back = h('a', { href: '#', class: 'home-auth-toggle' }, 'Back to log in');
-    back.addEventListener('click', (e) => { e.preventDefault(); resetMode = false; renderAuth(); });
-    authBar.append(form, note, back, err);
-}
-
-function renderAuth() {
-    // When signed in, the account's display name is used for games, so the
-    // optional per-game name field is redundant — hide it.
-    nameInput.style.display = currentUser ? 'none' : '';
-    authBar.replaceChildren();
-    if (currentUser) {
-        const logout = h('button', { class: 'home-forget', title: 'Log out of your account' }, 'Log out');
-        logout.addEventListener('click', async () => { try { await authPost('/auth/logout'); } catch { /* ignore */ } setAuthed(false); currentUser = null; signupMode = false; resetMode = false; renderAuth(); renderHistory(); });
-        authBar.append(h('span', {}, 'Signed in as '), h('b', {}, currentUser.display_name || currentUser.username), logout);
-        return;
-    }
-    if (resetMode) { renderResetRequest(); return; }
-    const err = h('div', { class: 'home-auth-err', role: 'alert' });
-    const user = h('input', { type: 'text', placeholder: 'Username', class: 'home-input', autocomplete: 'username', 'aria-label': 'Username' });
-    const email = h('input', { type: 'email', placeholder: 'Email', class: 'home-input', autocomplete: 'email', 'aria-label': 'Email' });
-    const pass = h('input', { type: 'password', placeholder: 'Password', class: 'home-input', autocomplete: signupMode ? 'new-password' : 'current-password', 'aria-label': 'Password' });
-    const submit = h('button', { class: 'primary', type: 'submit' }, signupMode ? 'Sign up' : 'Log in');
-    const fields = signupMode ? [user, email, pass] : [user, pass];
-    const form = h('form', { class: 'home-auth-form' }, ...fields, submit);
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        err.textContent = '';
-        withInflight(submit, async () => {
-            try {
-                currentUser = signupMode
-                    ? await authPost('/auth/signup', { username: user.value.trim(), email: email.value.trim(), password: pass.value })
-                    : await authPost('/auth/login', { username: user.value.trim(), password: pass.value });
-                setAuthed(true);
-                renderAuth();
-                renderHistory();
-            } catch (e) { err.textContent = e.message; }
-        });
-    });
-    const toggle = h('a', { href: '#', class: 'home-auth-toggle' }, signupMode ? 'Have an account? Log in' : 'Need an account? Sign up');
-    toggle.addEventListener('click', (e) => { e.preventDefault(); signupMode = !signupMode; renderAuth(); });
-    authBar.append(form, toggle);
-    if (!signupMode) {
-        const forgot = h('a', { href: '#', class: 'home-auth-toggle' }, 'Forgot password?');
-        forgot.addEventListener('click', (e) => { e.preventDefault(); resetMode = true; renderAuth(); });
-        authBar.append(forgot);
-    }
-    authBar.append(err);
-}
 
 // ---- completed-game history (shown when signed in) ----
-const historySection = h('div', { class: 'home-history' });
+const historySection = h('div', { class: 'home-history', id: 'your-games' });
 
 // relativeDate renders an ISO timestamp as a short "3h ago" string.
 function relativeDate(iso) {
@@ -225,7 +129,6 @@ async function renderHistory() {
 
 document.getElementById('home').append(
     h('div', { class: 'home-card' },
-        authBar,
         h('h1', { class: 'home-title' }, 'Cribbage'),
         nameInput,
         h('div', { class: 'home-actions' }, playBot, invite),
@@ -235,12 +138,15 @@ document.getElementById('home').append(
     ),
 );
 renderGames();
-renderAuth();
-// Only probe /auth/me when we last knew we were signed in — a guest's homepage
-// shows the login form regardless, so an unconditional probe just yields a wasted
-// (and console-logged) 401. authMe() reconciles the flag with the server.
-let wasAuthed = '0';
-try { wasAuthed = localStorage.getItem(AUTHED_KEY) || '0'; } catch { /* private mode */ }
-if (wasAuthed === '1') {
-    authMe().then((u) => { if (u) { currentUser = u; renderAuth(); renderHistory(); } });
-}
+
+// The site header owns auth; it calls back here whenever the known auth state
+// changes (initial guest state, the resolved user after probing /auth/me, and on
+// login/logout). We mirror it locally to hide the redundant name field and refresh
+// the "Your games" history.
+mountHeader({
+    onAuthChange: (user) => {
+        currentUser = user;
+        nameInput.style.display = user ? 'none' : '';
+        renderHistory();
+    },
+});
