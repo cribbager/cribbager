@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/cribbager/cribbager/internal/cribbage"
 	"github.com/cribbager/cribbager/internal/game"
 	"github.com/cribbager/cribbager/internal/scoring/hand"
@@ -222,6 +224,11 @@ type createRequest struct {
 	Mode   string `json:"mode"` // "bot" or "open"
 	Target int    `json:"target"`
 	Name   string `json:"name,omitempty"`
+	// Public, for an open game, lists it in the lobby (GET /lobby) for anyone to
+	// join ("Create a game"). It defaults to false, so an open game with no flag
+	// stays private/link-only ("Challenge a friend") — back-compatible. Ignored for
+	// bot games (never listed).
+	Public bool `json:"public,omitempty"`
 }
 
 type createResponse struct {
@@ -256,4 +263,19 @@ type actionResponse struct {
 type statsResponse struct {
 	Games       int `json:"games"`
 	Subscribers int `json:"subscribers"`
+}
+
+// lobbyGame is one joinable public open game in the GET /lobby listing: enough to
+// show it and join it (the game id is the join credential), and nothing private.
+type lobbyGame struct {
+	GameID    string    `json:"game_id"`
+	HostName  string    `json:"host_name"`
+	CreatedAt time.Time `json:"created_at"`
+	OpenSeat  game.Seat `json:"open_seat"` // the unclaimed seat a joiner takes
+}
+
+// lobbyResponse is the GET /lobby payload: the public open games still waiting for
+// an opponent. Games is always a (possibly empty) array, never null.
+type lobbyResponse struct {
+	Games []lobbyGame `json:"games"`
 }

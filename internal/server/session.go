@@ -29,6 +29,13 @@ type session struct {
 	names     [2]string // display name per seat (account name if logged in, else the typed name)
 	playerIDs [2]string // account id per seat ("" for a guest seat)
 
+	// public marks an open game as listable in the lobby (GET /lobby). It is
+	// opt-in at create time: "Create a game" sets it true; "Challenge a friend"
+	// (a private, link-only open game) and bot games leave it false. Only a public
+	// open game still waiting for an opponent is ever listed.
+	public    bool
+	createdAt time.Time // when the session was created (lobby "age")
+
 	lastSeen time.Time
 
 	subs      map[int]chan struct{}
@@ -166,6 +173,31 @@ func (s *session) roster() Delta {
 // subscriber. Must be called under s.mu.
 func (s *session) hasSubscribers() bool { return len(s.subs) > 0 }
 
+// joinableLobby reports whether this session belongs in the public lobby: a
+// public open game still waiting for an opponent. It excludes private (link-only)
+// games, bot games, games whose open seat is already claimed (full/started),
+// abandoned games, and finished games. Freshness is by current state, so a game
+// drops off as soon as it fills, ends, or is abandoned (and reaping removes it
+// from the registry entirely). Must be called under s.mu.
+func (s *session) joinableLobby() bool {
+	if !s.public {
+		return false // private "challenge a friend" game (link-only)
+	}
+	if s.bots[game.Seat0] != nil || s.bots[game.Seat1] != nil {
+		return false // vs-bot games are never listed
+	}
+	if s.tokens[game.Seat1] != "" {
+		return false // opponent already joined: full/started
+	}
+	if s.left[game.Seat0] || s.left[game.Seat1] {
+		return false // host (or anyone) abandoned the game
+	}
+	if _, over := s.game.Winner(); over {
+		return false // finished
+	}
+	return true
+}
+
 // record captures the session's durable state for persistence. Must be called
 // under s.mu. Transient transport state (subscribers, presence) is excluded — it
 // is rebuilt when clients reconnect.
@@ -178,6 +210,8 @@ func (s *session) record() Record {
 		PlayerIDs: s.playerIDs,
 		Left:      s.left,
 		Bots:      [2]bool{s.bots[game.Seat0] != nil, s.bots[game.Seat1] != nil},
+		Public:    s.public,
+		CreatedAt: s.createdAt,
 		LastSeen:  s.lastSeen,
 	}
 }
@@ -193,6 +227,8 @@ func sessionFromRecord(r Record, subCnt *atomic.Int64) *session {
 		names:     r.Names,
 		playerIDs: r.PlayerIDs,
 		left:      r.Left,
+		public:    r.Public,
+		createdAt: r.CreatedAt,
 		lastSeen:  r.LastSeen,
 		subCnt:    subCnt,
 	}
@@ -225,6 +261,19 @@ func (r *registry) count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.sessions)
+}
+
+// snapshot returns the currently registered sessions. The registry lock is held
+// only while copying the map's pointers, so callers can then lock each session
+// individually (e.g. to build the lobby list) without holding the registry lock.
+func (r *registry) snapshot() []*session {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]*session, 0, len(r.sessions))
+	for _, s := range r.sessions {
+		out = append(out, s)
+	}
+	return out
 }
 
 func (r *registry) get(id string) (*session, bool) {
