@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -209,6 +210,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("GET /readyz", s.handleReady)
 	mux.HandleFunc("GET /stats", s.handleStats)
+	mux.HandleFunc("GET /lobby", s.handleLobby)
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("POST /auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
@@ -301,6 +303,36 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, statsResponse{Games: games, Subscribers: subscribers})
 }
 
+// handleLobby lists the joinable public open games: those a host created as
+// public ("Create a game") that are still waiting for an opponent. Private
+// ("Challenge a friend") games, bot games, and games that have filled, finished,
+// or been abandoned are excluded — the filter is by each session's current state,
+// so the list always reflects reality (reaping removes stale sessions entirely).
+// No auth: guests can browse the lobby before joining or signing in.
+func (s *Server) handleLobby(w http.ResponseWriter, _ *http.Request) {
+	games := []lobbyGame{}
+	for _, sess := range s.reg.snapshot() {
+		sess.mu.Lock()
+		if sess.joinableLobby() {
+			games = append(games, lobbyGame{
+				GameID:    sess.id,
+				HostName:  sess.names[game.Seat0],
+				CreatedAt: sess.createdAt,
+				OpenSeat:  game.Seat1,
+			})
+		}
+		sess.mu.Unlock()
+	}
+	// Newest first, tie-broken by id, so the order is stable and deterministic.
+	sort.Slice(games, func(i, j int) bool {
+		if !games[i].CreatedAt.Equal(games[j].CreatedAt) {
+			return games[i].CreatedAt.After(games[j].CreatedAt)
+		}
+		return games[i].GameID < games[j].GameID
+	})
+	writeJSON(w, http.StatusOK, lobbyResponse{Games: games})
+}
+
 // noCache makes the browser revalidate static assets on every load. The web
 // client has no build step, so without this the browser keeps serving a stale
 // cached ES module after an edit — and "edit a file and just refresh" silently
@@ -366,10 +398,11 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := &session{
-		id:       newToken()[:16],
-		game:     game.New(game.Options{Deck: cryptoDeck{}, TargetScore: target}),
-		lastSeen: s.now(),
-		subCnt:   &s.subscribers,
+		id:        newToken()[:16],
+		game:      game.New(game.Options{Deck: cryptoDeck{}, TargetScore: target}),
+		createdAt: s.now(),
+		lastSeen:  s.now(),
+		subCnt:    &s.subscribers,
 	}
 	sess.tokens[game.Seat0] = newToken()
 	s.seatIdentity(sess, game.Seat0, r, req.Name)
@@ -388,7 +421,10 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 	case "open":
 		// An open game claims seat 0 and leaves seat 1 unclaimed. The game id is
 		// the join credential — anyone with it can take the open seat (single-join
-		// is enforced by seat occupancy, not a separate token).
+		// is enforced by seat occupancy, not a separate token). public is opt-in:
+		// set, the game is listed in the lobby ("Create a game"); unset (the
+		// default), it stays private/link-only ("Challenge a friend").
+		sess.public = req.Public
 	default:
 		writeErr(w, http.StatusBadRequest, `mode must be "bot" or "open"`)
 		return

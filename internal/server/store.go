@@ -17,7 +17,9 @@ type Record struct {
 	Names     [2]string
 	PlayerIDs [2]string // account id per seat ("" for a guest seat)
 	Left      [2]bool
-	Bots      [2]bool // whether each seat is a bot (re-attach the champion on restore)
+	Bots      [2]bool   // whether each seat is a bot (re-attach the champion on restore)
+	Public    bool      // open game listable in the lobby (vs. private/link-only)
+	CreatedAt time.Time // when the session was created (lobby "age")
 	LastSeen  time.Time
 }
 
