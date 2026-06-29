@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFrames, handStarts } from '../public/src/ui/replayFrames.js';
+import { buildFrames, handStarts, verdictsByHand } from '../public/src/ui/replayFrames.js';
 
 // A complete one-hand fixture (Alice deals; the bot is the pone). target:12 is
 // deliberately small so the dealer's crib pushes her exactly to the win — which
@@ -157,4 +157,41 @@ test('buildFrames: empty / missing input yields just the initial frame', () => {
   assert.equal(buildFrames().length, 1);
   assert.equal(buildFrames({}).length, 1);
   assert.equal(buildFrames({ events: [] }).length, 1);
+});
+
+// ---- A4: verdictsByHand (the discard-verdict ↔ hand association) ----
+
+// Two-hand replay so handStarts() yields two hands in order.
+const twoHandFrames = buildFrames({
+  target: 121,
+  events: [
+    { type: 'hand_dealt', dealer: 0, hands: [['2H', '3H', '4H', '5H', '6H', '7H'], ['2C', '3C', '4C', '5C', '6C', '7C']] },
+    { type: 'card_played', seat: 1, card: '2C', count: 2, points: 0 },
+    { type: 'hand_dealt', dealer: 1, hands: [['8H', '9H', 'TH', 'JH', 'QH', 'KH'], ['8C', '9C', 'TC', 'JC', 'QC', 'KC']] },
+  ],
+});
+
+test('verdictsByHand: aligns discards[i] with the i-th hand by number', () => {
+  const starts = handStarts(twoHandFrames); // hands 1 and 2
+  const analysis = { seat: 0, discards: [{ optimal: true, hand: ['A'] }, { optimal: false, hand: ['B'] }] };
+  const v = verdictsByHand(analysis, starts);
+  assert.equal(v[1].optimal, true);
+  assert.equal(v[2].optimal, false);
+  assert.equal(v[1].hand[0], 'A');
+});
+
+test('verdictsByHand: extra hand-starts beyond discards are simply unmapped', () => {
+  const starts = handStarts(twoHandFrames);
+  const analysis = { seat: 1, discards: [{ optimal: true }] }; // only one verdict
+  const v = verdictsByHand(analysis, starts);
+  assert.ok(v[1]);
+  assert.equal(v[2], undefined);
+});
+
+test('verdictsByHand: missing / empty analysis yields no verdicts', () => {
+  const starts = handStarts(twoHandFrames);
+  assert.deepEqual(verdictsByHand(null, starts), {});
+  assert.deepEqual(verdictsByHand({}, starts), {});
+  assert.deepEqual(verdictsByHand({ seat: 0, discards: [] }, starts), {});
+  assert.deepEqual(verdictsByHand({ seat: 0, discards: [{}] }, []), {});
 });

@@ -214,6 +214,29 @@ export function handStarts(frames) {
 }
 
 /**
+ * Associate A3 discard verdicts with the replay's hands.
+ *
+ * The analysis payload's `discards` array is in hand order (one entry per hand
+ * the requesting user discarded in), so its i-th entry corresponds to the i-th
+ * hand of the game. We align it against `handStarts()` — which lists the hands in
+ * the same order — keying each verdict by that hand's 1-based number, so the
+ * replay can look up "the verdict for the hand I'm currently viewing" directly.
+ *
+ * Only the requesting user's seat is graded by A3; the returned object therefore
+ * never describes the opponent's discards. Missing/empty analysis yields {}.
+ *
+ * @param {{ discards?: object[] }|null|undefined} analysis the A3 payload
+ * @param {ReadonlyArray<{hand:number,index:number}>} starts handStarts(frames)
+ * @returns {Object<number, object>} hand number (1-based) → verdict
+ */
+export function verdictsByHand(analysis, starts) {
+  const out = {};
+  const discards = analysis && Array.isArray(analysis.discards) ? analysis.discards : [];
+  (starts ?? []).forEach((s, i) => { if (discards[i]) out[s.hand] = discards[i]; });
+  return out;
+}
+
+/**
  * @typedef {Object} Frame
  * @property {?number} dealer        seat index of the dealer (or null pre-deal)
  * @property {number}  hand          1-based hand number (0 before the first deal)
