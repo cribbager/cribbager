@@ -335,6 +335,27 @@ button:active { transform: translateY(1px); }
 .home-history-analyze { flex: none; color: var(--btn); font-weight: 700; text-decoration: none; font-size: 12.5px; }
 .home-history-analyze:hover { text-decoration: underline; }
 
+/* Profile page (U6) — account, lifetime statistics, and game history. Uses the
+   F2 .panel primitive for each section; the history list reuses the .home-history-*
+   row styles above so the rows read identically to the old home-page list. */
+.profile-title { max-width: 640px; margin: 6vh auto var(--space-4); font-size: 26px; font-weight: 800; letter-spacing: 0.2px; }
+.profile-section { max-width: 640px; margin: 0 auto var(--space-4); }
+.profile-section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--muted); font-weight: 700; margin-bottom: var(--space-3); }
+.profile-name { font-size: 20px; font-weight: 800; color: var(--ink); }
+.profile-handle { color: var(--muted); font-weight: 700; margin-top: 2px; }
+.profile-field { color: var(--ink); margin-top: var(--space-2); }
+.profile-empty { color: var(--muted); }
+.profile-stat-summary { font-size: 13px; color: var(--muted); font-weight: 700; margin-bottom: var(--space-3); }
+.profile-stat-grid { display: flex; flex-direction: column; }
+.profile-stat-row { display: grid; grid-template-columns: 1fr repeat(4, 56px); gap: 8px;
+  align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.profile-stat-head { border-top: none; color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 700; }
+.profile-stat-name { font-weight: 700; color: var(--ink); }
+.profile-stat-cell { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.profile-stat-head .profile-stat-cell { color: var(--muted); }
+
 /* homepage account bar */
 .home-auth { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px;
   padding-bottom: 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
