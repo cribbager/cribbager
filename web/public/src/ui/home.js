@@ -1,7 +1,9 @@
-// Cribbager homepage — a light page with no game engine. It only starts a game
-// (vs the bot, or by inviting a human), joins one by id/link, or resumes one in
-// progress. Each game lives on its own /game.html?game=<id> URL; this page reads
-// the in-progress list straight from localStorage. This is the seed of a lobby.
+// Cribbager homepage — a light page with no game engine. It offers three ways to
+// start a game (a PUBLIC game that lists in the lobby, a PRIVATE "challenge a
+// friend" game reachable only by its link, or a game vs the computer), joins one
+// by id/link, resumes one in progress, and lists the public games waiting in the
+// lobby. Each game lives on its own /game.html?game=<id> URL; the in-progress list
+// is read straight from localStorage, and the lobby is polled from GET /lobby.
 
 import { mountHeader } from './header.js';
 
@@ -37,7 +39,21 @@ function parseGameId(s) {
     return id;
 }
 
-const go = (url) => { location.href = url; };
+const go = (url) => { stopLobby(); location.href = url; };
+
+// relativeDate renders an ISO timestamp as a short "3h ago" string (same helper
+// the profile/history lists use, inlined here since home.js is standalone).
+function relativeDate(iso) {
+    const t = new Date(iso).getTime();
+    if (!t) return '';
+    const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+    const hr = Math.floor(m / 60); if (hr < 24) return hr + 'h ago';
+    const d = Math.floor(hr / 24); if (d < 30) return d + 'd ago';
+    const mo = Math.floor(d / 30); if (mo < 12) return mo + 'mo ago';
+    return Math.floor(mo / 12) + 'y ago';
+}
 
 const nameInput = h('input', { type: 'text', placeholder: 'Your name (optional)', maxlength: '24', class: 'home-input', 'aria-label': 'Your name (optional)' });
 const joinInput = h('input', { type: 'text', placeholder: 'Game ID or invite link', class: 'home-input', 'aria-label': 'Game ID or invite link' });
@@ -48,10 +64,18 @@ function doJoin() {
     if (id) go('/game.html?join=' + encodeURIComponent(id));
 }
 
-const playBot = h('button', { class: 'primary' }, 'Play vs the bot');
+const playerName = () => encodeURIComponent(nameInput.value.trim());
+// Create a game → a PUBLIC open game that lists in the lobby (public=1). The host
+// lands in the game waiting for anyone to join.
+const createGame = h('button', { class: 'primary' }, 'Create a game');
+createGame.addEventListener('click', () => go('/game.html?new=open&public=1&name=' + playerName()));
+// Challenge a friend → a PRIVATE open game (no public flag): link/token only, the
+// host gets a shareable join link.
+const challenge = h('button', {}, 'Challenge a friend');
+challenge.addEventListener('click', () => go('/game.html?new=open&name=' + playerName()));
+// Play the computer → vs the bot (unchanged).
+const playBot = h('button', {}, 'Play the computer');
 playBot.addEventListener('click', () => go('/game.html?new=bot'));
-const invite = h('button', {}, 'Invite a friend');
-invite.addEventListener('click', () => go('/game.html?new=open&name=' + encodeURIComponent(nameInput.value.trim())));
 const joinBtn = h('button', {}, 'Join');
 joinBtn.addEventListener('click', doJoin);
 
@@ -73,6 +97,59 @@ function renderGames() {
     }
 }
 
+// ---- lobby: public open games waiting for a joiner ----
+// GET /lobby (no auth) returns joinable public open games, newest-first. We poll
+// it while this page is open and render each as a "host — age" row with a Join
+// button (the game_id is the join credential). Errors are swallowed quietly so a
+// transient blip doesn't spam the page; the next tick simply retries.
+const LOBBY_POLL_MS = 5000;
+let lobbyTimer = null;
+const lobbyList = h('div', { class: 'home-lobby-list' });
+
+function renderLobby(games) {
+    lobbyList.replaceChildren();
+    if (!games.length) {
+        lobbyList.append(h('div', { class: 'home-lobby-empty' }, 'No open games right now — create one!'));
+        return;
+    }
+    for (const g of games) {
+        const host = g.host_name && g.host_name.trim() ? g.host_name : 'Anonymous';
+        const join = h('button', { class: 'home-lobby-join' }, 'Join');
+        join.addEventListener('click', () => go('/game.html?join=' + encodeURIComponent(g.game_id)));
+        lobbyList.append(h('div', { class: 'home-lobby-row' },
+            h('div', { class: 'home-lobby-meta' },
+                h('span', { class: 'home-lobby-host' }, host),
+                h('span', { class: 'home-lobby-age' }, relativeDate(g.created_at))),
+            join,
+        ));
+    }
+}
+
+async function fetchLobby() {
+    try {
+        const res = await fetch('/lobby', { headers: { Accept: 'application/json' } });
+        if (!res.ok) return; // quiet: keep the last good list, retry next tick
+        const data = await res.json();
+        renderLobby(Array.isArray(data.games) ? data.games : []);
+    } catch { /* network blip — stay quiet and retry on the next interval */ }
+}
+
+function stopLobby() {
+    if (lobbyTimer) { clearInterval(lobbyTimer); lobbyTimer = null; }
+}
+function startLobby() {
+    fetchLobby();
+    lobbyTimer = setInterval(fetchLobby, LOBBY_POLL_MS);
+}
+// Don't leak the timer when the page is hidden/navigated away (pagehide also
+// covers bfcache); go() already clears it before navigating.
+window.addEventListener('pagehide', stopLobby);
+
+const lobbySection = h('div', { class: 'panel home-lobby' },
+    h('div', { class: 'home-label' }, 'Lobby'),
+    lobbyList,
+);
+
 // ---- accounts (optional; guests can still play without one) ----
 // Identity and the login/signup/forgot-password flows live in the global site
 // header (header.js). The home page only reacts to the resulting auth state to
@@ -83,12 +160,15 @@ document.getElementById('home').append(
     h('div', { class: 'home-card' },
         h('h1', { class: 'home-title' }, 'Cribbage'),
         nameInput,
-        h('div', { class: 'home-actions' }, playBot, invite),
+        h('div', { class: 'home-actions' }, createGame, challenge, playBot),
         h('div', { class: 'home-join' }, joinInput, joinBtn),
         gamesSection,
     ),
+    lobbySection,
 );
 renderGames();
+renderLobby([]); // friendly empty state until the first fetch resolves
+startLobby();
 
 // The site header owns auth; it calls back here whenever the known auth state
 // changes (initial guest state, the resolved user after probing /auth/me, and on
