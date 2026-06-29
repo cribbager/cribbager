@@ -7,7 +7,7 @@
   border-radius: var(--card-radius, 10px); background: var(--card-bg, #fff);
   border: 1px solid var(--card-border, #d8cdb4); box-shadow: var(--shadow, 0 1px 3px rgba(60, 45, 20, 0.14));
   position: relative; user-select: none; flex: 0 0 auto;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  transition: transform var(--transition-fast, 0.08s) ease, box-shadow var(--transition-fast, 0.08s) ease;
 }
 /* corner index: rank stacked over its suit (compact identity, readable when cards overlap) */
 .card .corner { position: absolute; top: 6px; left: 8px; display: flex; flex-direction: column; align-items: center; line-height: 0.92; font-weight: 800; }
@@ -16,9 +16,12 @@
 .card .pip { position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--card-pip-size, 32px); padding-top: 10px; }
 .card.red { color: var(--card-red, #c0392b); }
 .card.black { color: var(--ink, #2c2418); }
+/* The face-down back. Colours fall back to literals so this file still renders
+   standalone in the card designer (which doesn't load styles.css / the tokens). */
 .card.facedown {
   background:
-    radial-gradient(circle at 30% 30%, #3a5d86, #294767),
-    repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.06) 5px, rgba(255,255,255,0.06) 10px);
-  border-color: #213a5c;
+    radial-gradient(circle at 30% 30%, var(--card-back-top, #3a5d86), var(--card-back-bottom, #294767)),
+    repeating-linear-gradient(45deg, transparent, transparent 5px,
+      var(--card-back-hatch, rgba(255,255,255,0.06)) 5px, var(--card-back-hatch, rgba(255,255,255,0.06)) 10px);
+  border-color: var(--card-back-border, #213a5c);
 }

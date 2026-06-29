@@ -1,21 +1,124 @@
+/* ============================================================================
+   F2 — Shared style tokens (lightweight foundation; NOT a redesign)
+   ----------------------------------------------------------------------------
+   Semantic CSS custom properties are the single source of truth for the
+   parchment / classic theme. Every token maps 1:1 to a value the app already
+   used, so adopting them is a pure refactor with ZERO visual change.
+
+   How to use this foundation for NEW UI (existing UI migrates incrementally):
+     - Colors:      --color-bg, --color-surface, --color-felt, --color-ink,
+                    --color-ink-muted, --color-border, --color-accent,
+                    --color-success, --color-danger-ink, --color-gold,
+                    plus player + card-suit colors.
+     - Typography:  --font-sans / --font-mono / --font-display; --text-* scale;
+                    --text-base / --leading-base for body copy.
+     - Spacing:     --space-1 .. --space-6 (a small 4px-based scale).
+     - Radii:       --radius-sm / --radius / --radius-lg / --radius-pill.
+     - Elevation:   --shadow / --shadow-modal / --shadow-selected.
+   Component primitives built from these tokens live at the bottom of this file:
+     .btn / .btn-primary, .input, .panel, .modal-overlay + .modal.
+   They reproduce the current looks and are ready for new UI; existing elements
+   keep their own classes for now (no rewiring = no regressions).
+
+   Legacy short aliases (--bg, --ink, --btn, ...) are kept below so existing
+   rules — and cardFace.css, which references --ink/--shadow/--card-red — keep
+   resolving to identical values. Migrate refs to the semantic names over time.
+   ============================================================================ */
 :root {
-  --bg: #f5edda;          /* warm parchment */
-  --panel: #fffaf0;       /* warm white */
-  --felt: #fbf4e4;
-  --ink: #2c2418;         /* warm near-black */
-  --muted: #8a7d63;
-  --line: #e2d6bd;
-  --you: #b8332b;         /* You — red (bottom board track) */
-  --bot: #2f6f9e;         /* Opponent — blue (top board track) */
-  --card-red: #c0392b;    /* card suit red — independent of player identity */
-  --btn: #2f6f9e;         /* interactive chrome (buttons, playable/selected) */
-  --accent: #1f7a4d;
-  --gold: #c79a2e;
-  --shadow: 0 1px 3px rgba(60, 45, 20, 0.14);
+  /* Surfaces */
+  --color-bg: #f5edda;            /* warm parchment — page background */
+  --color-surface: #fffaf0;       /* warm white — cards / panels / buttons */
+  --color-felt: #fbf4e4;          /* table felt */
+  --color-surface-input: #fff;    /* input field background */
+  --color-surface-tag: #efe6d2;   /* small tag / chip surface (crib tag) */
+
+  /* Ink / text */
+  --color-ink: #2c2418;           /* warm near-black — primary text */
+  --color-ink-soft: #5f5238;      /* softened ink — score breakdown items */
+  --color-ink-muted: #8a7d63;     /* muted / secondary text */
+  --color-on-accent: #fff;        /* text / icon on a filled accent surface */
+
+  /* Lines / borders */
+  --color-border: #e2d6bd;        /* hairline borders */
+  --color-border-dashed: #b3a07a; /* dashed outlines (crib slot / crib tag) */
+
+  /* Brand / accents */
+  --color-accent: #2f6f9e;        /* interactive blue — primary buttons, selection */
+  --color-success: #1f7a4d;       /* green — wins, notices, link hover */
+  --color-gold: #c79a2e;          /* focus ring / highlight */
+  --color-player-you: #b8332b;    /* player identity — you (red, bottom track) */
+  --color-player-bot: #2f6f9e;    /* player identity — opponent (blue, top track) */
+  --color-card-red: #c0392b;      /* card suit red — independent of player */
+
+  /* State tints (chips, call bubbles, scrim) */
+  --color-danger-ink: #a3331f;
+  --color-danger-bg: rgba(192, 57, 43, 0.10);
+  --color-danger-border: rgba(192, 57, 43, 0.22);
+  --color-success-bg: rgba(31, 122, 77, 0.10);
+  --color-success-border: rgba(31, 122, 77, 0.24);
+  --color-call-you-bg: rgba(47, 111, 158, 0.16);   /* accent-blue @16% behind the "you" count */
+  --color-call-bot-bg: rgba(184, 51, 43, 0.16);    /* you-red @16% behind the "bot" count */
+  --color-scrim: rgba(40, 30, 15, 0.5);            /* modal backdrop */
+
+  /* Card-back (face-down) palette — also referenced by cardFace.css */
+  --card-back-top: #3a5d86;
+  --card-back-bottom: #294767;
+  --card-back-hatch: rgba(255, 255, 255, 0.06);
+  --card-back-border: #213a5c;
+
+  /* Typography */
+  --font-sans: ui-rounded, "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, sans-serif;
+  --font-mono: ui-monospace, Menlo, monospace;
+  --font-display: var(--font-sans);  /* same family for now; a hook for future display type */
+  --text-base: 15px;                 /* body copy size */
+  --leading-base: 1.4;               /* body line-height */
+  /* Small type scale for new UI (existing rules keep their literal sizes for now). */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+
+  /* Spacing scale (4px base) for new UI; existing rules keep their literal spacing. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Radii */
+  --radius-sm: 8px;
   --radius: 12px;
-  /* Standard playing-card proportion 2.5 : 3.5 (= 1.4); sized to balance the board. */
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow: 0 1px 3px rgba(60, 45, 20, 0.14);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.32);
+  --shadow-selected: 0 8px 16px rgba(47, 111, 158, 0.35);  /* lifted selected card */
+
+  /* Motion */
+  --transition-fast: 0.08s;
+
+  /* Card geometry — standard 2.5 : 3.5 (= 1.4) proportion; sized to balance the board. */
   --card-w: 70px;
   --card-h: 98px;
+
+  /* ---- Legacy aliases: keep existing rules + cardFace.css resolving unchanged ---- */
+  --bg: var(--color-bg);
+  --panel: var(--color-surface);
+  --felt: var(--color-felt);
+  --ink: var(--color-ink);
+  --muted: var(--color-ink-muted);
+  --line: var(--color-border);
+  --you: var(--color-player-you);
+  --bot: var(--color-player-bot);
+  --card-red: var(--color-card-red);
+  --btn: var(--color-accent);
+  --accent: var(--color-success);
+  --gold: var(--color-gold);
 }
 * { box-sizing: border-box; }
 html, body {
@@ -33,7 +136,7 @@ html, body {
 .masthead h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; font-weight: 800; }
 .toggles { display: flex; gap: 8px; align-self: center; }
 .quit-toggle { padding: 6px 14px; font-size: 13px; font-weight: 700; border: 1px solid var(--line);
-  background: var(--panel); color: var(--muted); border-radius: 999px; cursor: pointer; box-shadow: var(--shadow); }
+  background: var(--panel); color: var(--muted); border-radius: var(--radius-pill); cursor: pointer; box-shadow: var(--shadow); }
 /* signed-in identity in the masthead, sitting alongside the toggles */
 .masthead-user { font-size: 12px; color: var(--muted); align-self: center; white-space: nowrap; }
 .masthead-user b { color: var(--ink); font-weight: 700; }
@@ -53,9 +156,9 @@ html, body {
 /* Inset the player areas so their cards line up with the board body. */
 .seat { display: flex; flex-direction: column; gap: 3px; padding: 0 14px; }
 /* the spoken count/call, to the right of a player's played cards */
-.call { font-size: 18px; font-weight: 800; padding: 6px 16px; border-radius: 999px; white-space: nowrap; }
-.call.you { background: rgba(47, 111, 158, 0.16); color: var(--you); }
-.call.bot { background: rgba(184, 51, 43, 0.16); color: var(--bot); }
+.call { font-size: 18px; font-weight: 800; padding: 6px 16px; border-radius: var(--radius-pill); white-space: nowrap; }
+.call.you { background: var(--color-call-you-bg); color: var(--you); }
+.call.bot { background: var(--color-call-bot-bg); color: var(--bot); }
 
 /* central stage — only the cut-for-deal now */
 .stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0; }
@@ -75,10 +178,10 @@ html, body {
 .show-score { margin-left: 16px; font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; }
 /* matches a card row's reserved height so the seat box never changes height */
 .show-breakdown { display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 6px 16px; min-height: 104px; padding-top: 6px; }
-.bd-item { font-size: 14px; font-weight: 600; color: #5f5238; cursor: default; }
+.bd-item { font-size: 14px; font-weight: 600; color: var(--color-ink-soft); cursor: default; }
 .bd-item:hover { color: var(--accent); }
 .bd-empty { color: var(--muted); font-style: italic; }
-.crib-tag { background: #efe6d2; border: 1px dashed var(--hole, #b3a07a); border-radius: 7px; padding: 4px 9px;
+.crib-tag { background: var(--color-surface-tag); border: 1px dashed var(--color-border-dashed); border-radius: 7px; padding: 4px 9px;
   font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); align-self: center; margin-right: 6px; }
 
 .seat.opp .pegged { align-items: flex-end; }
@@ -89,7 +192,7 @@ html, body {
 /* the crib: a dashed card outline with "crib" inside (no faded card, no label) */
 .crib-slot {
   width: var(--card-w); height: var(--card-h); border-radius: 9px;
-  border: 2px dashed #b3a07a; background: transparent;
+  border: 2px dashed var(--color-border-dashed); background: transparent;
   display: grid; place-items: center;
   color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;
 }
@@ -110,7 +213,7 @@ html, body {
    via --card-w/--card-h. Below are the game-only card states. */
 .card.selectable { cursor: pointer; }
 .card.selectable:hover { transform: translateY(-5px); }
-.card.selected { transform: translateY(-12px); border-color: var(--btn); box-shadow: 0 8px 16px rgba(47,111,158,0.35); }
+.card.selected { transform: translateY(-12px); border-color: var(--btn); box-shadow: var(--shadow-selected); }
 .card.legal { cursor: pointer; outline: 2px solid var(--btn); outline-offset: 1px; }
 .card.legal:hover { transform: translateY(-5px); }
 .card.dim { opacity: 0.4; }
@@ -127,7 +230,7 @@ button {
   background: var(--panel); color: var(--ink);
   padding: 10px 18px; border-radius: 10px; cursor: pointer; box-shadow: var(--shadow);
 }
-button.primary { background: var(--btn); border-color: var(--btn); color: #fff; }
+button.primary { background: var(--btn); border-color: var(--btn); color: var(--color-on-accent); }
 button.primary:disabled { opacity: 0.4; cursor: default; }
 button:active { transform: translateY(1px); }
 
@@ -139,17 +242,17 @@ button:active { transform: translateY(1px); }
 .cut-result { font-size: 17px; font-weight: 700; }
 
 /* end overlay */
-.overlay { position: fixed; inset: 0; background: rgba(40, 30, 15, 0.5); display: grid; place-items: center; z-index: 10; }
-.card-modal { background: var(--panel); border-radius: 16px; padding: 28px 36px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,0.32); }
+.overlay { position: fixed; inset: 0; background: var(--color-scrim); display: grid; place-items: center; z-index: 10; }
+.card-modal { background: var(--panel); border-radius: var(--radius-lg); padding: 28px 36px; text-align: center; box-shadow: var(--shadow-modal); }
 .card-modal h2 { margin: 0 0 6px; }
 .card-modal p { color: var(--muted); margin: 6px 0 18px; font-weight: 600; }
 
 /* homepage (index.html) — a light page, no game engine */
 .home-card { max-width: 440px; margin: 8vh auto 0; background: var(--panel); border: 1px solid var(--line);
-  border-radius: 16px; padding: 26px 30px 30px; box-shadow: var(--shadow); }
+  border-radius: var(--radius-lg); padding: 26px 30px 30px; box-shadow: var(--shadow); }
 .home-title { margin: 0 0 14px; font-size: 26px; font-weight: 800; letter-spacing: 0.2px; }
 .home-input { display: block; width: 100%; box-sizing: border-box; padding: 9px 12px; margin: 8px 0;
-  border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
+  border: 1px solid var(--line); border-radius: 10px; font: inherit; background: var(--color-surface-input); }
 .home-actions { display: flex; gap: 8px; margin: 12px 0 18px; }
 .home-actions button { flex: 1; }
 .home-join { display: flex; gap: 8px; align-items: center; }
@@ -161,7 +264,7 @@ button:active { transform: translateY(1px); }
 .home-resume { color: var(--btn); font-weight: 700; text-decoration: none; }
 .home-resume:hover { text-decoration: underline; }
 .home-forget { padding: 4px 11px; font-size: 13px; }
-.gameid { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--ink); word-break: break-all; }
+.gameid { font-family: var(--font-mono); font-size: 12px; color: var(--ink); word-break: break-all; }
 
 /* Completed-game history ("Your games"), shown when signed in. */
 .home-history { margin-top: 22px; }
@@ -170,8 +273,8 @@ button:active { transform: translateY(1px); }
 .home-history-list { display: flex; flex-direction: column; }
 .home-history-row { display: flex; align-items: center; gap: 10px; padding: 8px 0;
   border-top: 1px solid var(--line); font-size: 13.5px; }
-.home-history-badge { flex: none; width: 22px; height: 22px; border-radius: 999px; display: grid;
-  place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+.home-history-badge { flex: none; width: 22px; height: 22px; border-radius: var(--radius-pill); display: grid;
+  place-items: center; font-size: 11px; font-weight: 800; color: var(--color-on-accent); }
 .home-history-row.won .home-history-badge { background: var(--accent); }
 .home-history-row.lost .home-history-badge { background: var(--muted); }
 .home-history-opp { flex: 1 1 auto; font-weight: 700; color: var(--ink); white-space: nowrap;
@@ -191,10 +294,44 @@ button:active { transform: translateY(1px); }
 
 /* auth feedback messages — consistent across the homepage auth bar and reset page.
    Error is red, notice/success is the accent green; both are full-width chips. */
-.home-auth-err, .home-auth-note { font-size: 13px; width: 100%; border-radius: 8px; padding: 7px 11px; font-weight: 600; }
+.home-auth-err, .home-auth-note { font-size: 13px; width: 100%; border-radius: var(--radius-sm); padding: 7px 11px; font-weight: 600; }
 .home-auth-err:empty, .home-auth-note:empty { display: none; }
-.home-auth-err { color: #a3331f; background: rgba(192, 57, 43, 0.10); border: 1px solid rgba(192, 57, 43, 0.22); }
-.home-auth-note { color: var(--accent); background: rgba(31, 122, 77, 0.10); border: 1px solid rgba(31, 122, 77, 0.24); }
+.home-auth-err { color: var(--color-danger-ink); background: var(--color-danger-bg); border: 1px solid var(--color-danger-border); }
+.home-auth-note { color: var(--accent); background: var(--color-success-bg); border: 1px solid var(--color-success-border); }
+
+/* ============================================================================
+   Shared component primitives (F2)
+   ----------------------------------------------------------------------------
+   Token-built classes that reproduce the existing looks, ready for NEW UI to
+   adopt for a consistent feel. They are intentionally NOT wired onto current
+   elements (which keep their own classes) so this refactor stays zero-change.
+   - .btn / .btn-primary   mirror the bare <button> and <button class="primary">.
+   - .input                mirrors .home-input (without its layout margin).
+   - .panel                mirrors the .home-card surface container.
+   - .modal-overlay/.modal mirror the game-over .overlay / .card-modal.
+   ============================================================================ */
+.btn {
+  font: inherit; font-weight: 700; border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-ink);
+  padding: 10px 18px; border-radius: 10px; cursor: pointer; box-shadow: var(--shadow);
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.btn-primary:disabled { opacity: 0.4; cursor: default; }
+
+.input {
+  display: block; width: 100%; box-sizing: border-box; padding: 9px 12px;
+  border: 1px solid var(--color-border); border-radius: 10px; font: inherit;
+  background: var(--color-surface-input); color: var(--color-ink);
+}
+
+.panel {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--space-6);
+}
+
+.modal-overlay { position: fixed; inset: 0; background: var(--color-scrim); display: grid; place-items: center; z-index: 10; }
+.modal { background: var(--color-surface); border-radius: var(--radius-lg); padding: 28px 36px; text-align: center; box-shadow: var(--shadow-modal); }
 
 @media (max-width: 560px) {
   :root { --card-w: 52px; --card-h: 73px; }
