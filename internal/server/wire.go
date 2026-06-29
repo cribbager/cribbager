@@ -35,6 +35,18 @@ type Delta struct {
 	Hand   []cribbage.Card `json:"hand,omitempty"`
 	Cut    []cribbage.Card `json:"cut,omitempty"` // slice, not array: omitempty works
 
+	// Hands carries BOTH seats' full dealt hands on a hand_dealt delta, indexed by
+	// seat ([]{seat0Hand, seat1Hand}). It is set ONLY by the full-visibility replay
+	// projection (projectReplayEvent), never by the live per-seat projection, which
+	// redacts the opponent's hand.
+	//
+	// Deliberately a slice, not [2][]cribbage.Card: encoding/json's omitempty is a
+	// no-op on a fixed-size array (it is never "empty"), so an array would emit
+	// "hands":[null,null] on EVERY live delta and break the byte-for-byte identity
+	// of the live wire format. A nil slice omits cleanly. The replay JSON shape is
+	// unchanged either way: "hands":[[...6],[...6]].
+	Hands [][]cribbage.Card `json:"hands,omitempty"`
+
 	OpponentCards int          `json:"opponentCards"`
 	Points        int          `json:"points"`
 	Count         int          `json:"count"`
@@ -150,6 +162,56 @@ func projectEvent(viewer game.Seat, e game.Event, seq int) Delta {
 		d.Type, d.Seat = "game_won", &seat
 	}
 	return d
+}
+
+// projectReplayEvents is the full-visibility counterpart of projectEvents, used
+// ONLY for post-game replay of a finished, stored game by one of its
+// participants. It tags each event with its sequence number (events[i] gets seq
+// baseSeq+1+i), exactly like projectEvents.
+func projectReplayEvents(events []game.Event, baseSeq int) []Delta {
+	out := make([]Delta, 0, len(events))
+	for i, e := range events {
+		out = append(out, projectReplayEvent(e, baseSeq+1+i))
+	}
+	return out
+}
+
+// projectReplayEvent flattens one engine event into a Delta with FULL
+// visibility, for post-game replay. It is identical to projectEvent (same type
+// discriminators, same field names, so the client's existing delta vocabulary is
+// reused unchanged) EXCEPT for the two events that the live projection redacts:
+//
+//   - hand_dealt: emits BOTH seats' full dealt hands (Hands), not just the
+//     viewer's hand + an opponent count.
+//   - discarded: always emits the actual Cards, for either seat.
+//
+// Every other event type carries no hidden information and is delegated to
+// projectEvent verbatim, so it stays byte-identical to the live delta. There is
+// no viewer here: a replay shows the whole game.
+func projectReplayEvent(e game.Event, seq int) Delta {
+	switch e := e.(type) {
+	case game.HandDealt:
+		dealer := e.Dealer
+		return Delta{
+			Seq:    seq,
+			Type:   "hand_dealt",
+			Dealer: &dealer,
+			Hands:  [][]cribbage.Card{e.Hands[game.Seat0], e.Hands[game.Seat1]},
+		}
+	case game.Discarded:
+		seat := e.Seat
+		return Delta{
+			Seq:   seq,
+			Type:  "discarded",
+			Seat:  &seat,
+			Cards: e.Cards[:], // both seats' discards are revealed in replay
+		}
+	default:
+		// All other events carry no hidden info; reuse the live projection so the
+		// wire shape matches the deltas the client already parses. The viewer seat is
+		// irrelevant for these cases (it only affects hand_dealt/discarded above).
+		return projectEvent(game.Seat0, e, seq)
+	}
 }
 
 func other(s game.Seat) game.Seat { return s ^ 1 }
