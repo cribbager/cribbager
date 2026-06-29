@@ -163,14 +163,15 @@ export function mountHeader({ onAuthChange } = {}) {
             return el;
         };
 
-        // Profile has no page yet — present but disabled (a follow-up).
-        addItem('Profile', { disabled: true, href: '#' });
-        // Game history lives on the home page ("Your games"); link/scroll to it.
+        // Profile (U6): account, lifetime stats, and game history.
+        addItem('Profile', { href: '/profile.html' });
+        // Game history now lives on the profile page (under #history); jump to it.
+        // If we're already on the profile page, smooth-scroll to the section instead.
         addItem('Game history', {
-            href: '/#your-games',
+            href: '/profile.html#history',
             onClick: (e) => {
-                const onHome = location.pathname === '/' || location.pathname.endsWith('/index.html');
-                const target = onHome && document.getElementById('your-games');
+                const onProfile = location.pathname.endsWith('/profile.html');
+                const target = onProfile && document.getElementById('history');
                 if (target) { e.preventDefault(); closeMenu(); target.scrollIntoView({ behavior: 'smooth' }); }
             },
         });

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Profile · Cribbager</title>
+    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <!-- Global site header (wordmark + auth/identity), mounted by header.js. -->
+    <header id="site-header"></header>
+    <!-- The signed-in user's profile: account, lifetime statistics, and game history. -->
+    <div id="profile"></div>
+    <script type="module" src="/src/ui/profile.js"></script>
+  </body>
+</html>
