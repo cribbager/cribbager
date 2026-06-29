@@ -107,6 +107,40 @@ func (p *PgResultStore) ResultsForPlayer(playerID string, limit int) ([]Result, 
 	return out, rows.Err()
 }
 
+// ResultsForPlayerWithEvents loads all of a player's finished games with their
+// gob-encoded event logs decoded, so stats can replay the scoring events. No
+// limit (callers aggregate the whole set); version metadata is not needed here.
+func (p *PgResultStore) ResultsForPlayerWithEvents(playerID string) ([]Result, error) {
+	ctx, cancel := dbCtx()
+	defer cancel()
+	rows, err := p.db.QueryContext(ctx, `
+		SELECT id, player_id_0, player_id_1, name_0, name_1, score_0, score_1, winner, events, ended_at
+		FROM results
+		WHERE player_id_0 = $1 OR player_id_1 = $1`, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Result
+	for rows.Next() {
+		var r Result
+		var p0, p1 sql.NullString
+		var events []byte
+		if err := rows.Scan(&r.ID, &p0, &p1, &r.Names[0], &r.Names[1],
+			&r.Scores[0], &r.Scores[1], &r.Winner, &events, &r.EndedAt); err != nil {
+			return nil, err
+		}
+		r.PlayerIDs[0], r.PlayerIDs[1] = p0.String, p1.String
+		if len(events) > 0 {
+			if err := gob.NewDecoder(bytes.NewReader(events)).Decode(&r.Events); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // ResultByID loads one finished game by id, decoding the gob-encoded event log
 // (and version metadata) so the post-game analysis can replay it. ok=false maps
 // the no-rows case to a clean miss rather than an error.
