@@ -81,28 +81,47 @@ function dealShow() {
 // Cards are indexed 0..4 across the show; index 4 is the starter (the cut).
 const STARTER = 4;
 const state = {
+    mode: 'practice',     // 'practice' (score it yourself) | 'show' (show me how)
     cards: [],            // five {rank, suit}: [0..3] sorted hand, [4] starter
     selected: new Set(),  // indices into cards currently picked for a declaration
     kindId: 'fifteen',    // the selected dropdown entry id for the next declaration
     count: '',            // the running total count the user claims after this combo
     declarations: [],     // [{ kindId, idxs:[...], count:int }]
     result: null,         // graded verdict { correct, total, declTotal, declared:[...], missed:[...] }, or null
+    answer: null,         // show-me breakdown { lines:[{cards, phrase, count}], total }, or null
     busy: false,          // a /tools/score-hand request is in flight
     builderError: null,   // inline reason an "Add to score" was rejected, or null
     error: null,          // a friendly request-level error message, or null
 };
 
-function newDeal() {
-    state.cards = dealShow();
+// resetHand clears the per-hand interaction state (keeps the dealt cards + mode).
+function resetHand() {
     state.selected = new Set();
     state.kindId = 'fifteen';
     state.count = '';
     state.declarations = [];
     state.result = null;
+    state.answer = null;
     state.busy = false;
     state.builderError = null;
     state.error = null;
+}
+
+function newDeal() {
+    state.cards = dealShow();
+    resetHand();
     render();
+    if (state.mode === 'show') loadAnswer();
+}
+
+// setMode switches between Practice and Show-me on the SAME hand, resetting the
+// interaction; entering Show-me fetches and displays the correct scoring.
+function setMode(mode) {
+    if (state.mode === mode) return;
+    state.mode = mode;
+    resetHand();
+    render();
+    if (mode === 'show') loadAnswer();
 }
 
 function toggleSelect(i) {
@@ -354,11 +373,67 @@ function grade(declTotal, rawCombos, engineTotal) {
     return { correct, total: engineTotal, declTotal, declared, missed };
 }
 
+// buildAnswer turns the engine's combos into the Show-me breakdown: every combo
+// decomposed to atoms, ordered the way you'd count aloud (fifteens, pairs, runs,
+// flush, nobs), each carrying the running count up to it (ending at the total).
+function buildAnswer(rawCombos, total) {
+    const atoms = [];
+    for (const c of rawCombos) atoms.push(...atomsFromEngineCombo(c));
+    const order = { fifteen: 0, pair: 1, run: 2, flush: 3, nobs: 4 };
+    atoms.sort((a, b) => (order[a.kind] - order[b.kind]) || ((a.runLen || 0) - (b.runLen || 0)));
+    let run = 0;
+    const lines = atoms.map((a) => { run += a.points; return { cards: a.cards, phrase: atomPhrase(a), count: run }; });
+    return { lines, total };
+}
+
+// loadAnswer fetches the engine score for the current hand and stores the Show-me
+// breakdown. Reuses the same /tools/score-hand endpoint and error handling as submit.
+async function loadAnswer() {
+    state.busy = true;
+    state.error = null;
+    render();
+
+    const hand = state.cards.slice(0, 4).map(cardCode);
+    const starter = cardCode(state.cards[STARTER]);
+    let r;
+    try {
+        r = await fetch('/tools/score-hand', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hand, starter, crib: false }),
+        });
+    } catch {
+        state.busy = false;
+        state.error = 'There was a network problem reaching the engine. Check your connection and try again.';
+        render();
+        return;
+    }
+    if (!r.ok) {
+        state.busy = false;
+        state.error = 'The engine could not score that hand. Deal a new hand and try again.';
+        render();
+        return;
+    }
+    let data;
+    try {
+        data = await r.json();
+    } catch {
+        state.busy = false;
+        state.error = 'The engine returned an unexpected response. Try again.';
+        render();
+        return;
+    }
+
+    state.busy = false;
+    state.answer = buildAnswer(data.combos || [], data.total || 0);
+    render();
+}
+
 // --- rendering ----------------------------------------------------------------
 function renderShow() {
     const cards = state.cards.map((c, i) => {
         const sel = state.selected.has(i);
-        const locked = !!state.result;
+        const locked = !!state.result || state.mode === 'show';
         const isStarter = i === STARTER;
         const extra = locked ? '' : 'selectable' + (sel ? ' selected' : '');
         const face = cardFace(c, { extra: extra.trim() });
@@ -415,24 +490,49 @@ function comboLine(cards, phrase, forNumber, opts = {}) {
     const cls = 'sq-combo'
         + (opts.wrong ? ' is-wrong' : '')
         + (opts.missed ? ' is-missed' : '');
+    const kids = [];
     // Leading chip, flush left: before grading it's the remove (✕) button; after
     // grading it's a green circled check (correct) or red circled ✕ (wrong/missed).
-    let lead;
-    if (opts.onRemove) {
-        lead = h('button', {
-            class: 'sq-decl-remove', type: 'button', 'aria-label': 'Remove this combo',
-            onclick: opts.onRemove,
-        }, '✕');
-    } else if (opts.status === 'correct') {
-        lead = h('span', { class: 'sq-status ok', 'aria-label': 'correct' }, '✓');
-    } else {
-        lead = h('span', { class: 'sq-status bad', 'aria-label': opts.status === 'missed' ? 'missed' : 'wrong' }, '✕');
+    // Show-me lines are `plain` — the breakdown is the answer, so no chip.
+    if (!opts.plain) {
+        if (opts.onRemove) {
+            kids.push(h('button', {
+                class: 'sq-decl-remove', type: 'button', 'aria-label': 'Remove this combo',
+                onclick: opts.onRemove,
+            }, '✕'));
+        } else if (opts.status === 'correct') {
+            kids.push(h('span', { class: 'sq-status ok', 'aria-label': 'correct' }, '✓'));
+        } else {
+            kids.push(h('span', { class: 'sq-status bad', 'aria-label': opts.status === 'missed' ? 'missed' : 'wrong' }, '✕'));
+        }
     }
-    return h('div', { class: cls },
-        lead,
+    kids.push(
         h('span', { class: 'sq-combo-cards' }, ...sortCards(cards).map((c) => cardFace(c, { small: true }))),
         h('span', { class: 'sq-combo-call' }, `${phrase} for ${forNumber}`),
     );
+    return h('div', { class: cls }, ...kids);
+}
+
+// renderModeToggle is the Practice / Show-me segmented control above the deck.
+function renderModeToggle() {
+    const tab = (mode, label) => h('button', {
+        class: 'sq-mode-tab' + (state.mode === mode ? ' is-active' : ''),
+        type: 'button', 'aria-pressed': state.mode === mode ? 'true' : 'false',
+        onclick: () => setMode(mode),
+    }, label);
+    return h('div', { class: 'sq-modes' }, tab('practice', 'Practice'), tab('show', 'Show me'));
+}
+
+// renderAnswer is the Show-me breakdown: the correct combos with running counts.
+function renderAnswer() {
+    if (state.busy) return h('div', { class: 'sq-answer-loading' }, 'Scoring…');
+    if (!state.answer) return null;
+    if (!state.answer.lines.length) {
+        return h('div', { class: 'sq-decl-list' },
+            h('div', { class: 'sq-combo' }, h('span', { class: 'sq-combo-call' }, 'No points in this hand — a nineteen.')));
+    }
+    const rows = state.answer.lines.map((l) => comboLine(l.cards, l.phrase, l.count, { plain: true }));
+    return h('div', { class: 'sq-decl-list' }, ...rows);
 }
 
 // renderDeclared lists the combos inline (no panel, no heading). Before grading
@@ -468,6 +568,11 @@ function renderDeclared() {
 // left. After grading: the Submit button is replaced in place (bottom left) by the
 // overall Correct / Not-quite graphic, with the New Hand button at the right.
 function renderBottom() {
+    // Show-me mode: there's nothing to submit — just a Next Hand button.
+    if (state.mode === 'show') {
+        return h('div', { class: 'sq-bottom' },
+            h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'Next Hand'));
+    }
     if (state.result) {
         const verdict = state.result.correct
             ? h('span', { class: 'pr-badge ok' }, '✓ Correct')
@@ -487,9 +592,15 @@ function renderBottom() {
 }
 
 function render() {
-    // Deck on top, the form directly under it, the added-scores list, then the
-    // bottom row (Submit Score → verdict + New Hand once graded).
-    const board = [renderShow(), renderControls(), renderDeclared(), renderBottom()];
+    // Mode toggle + deck on top. Practice: form + your added-scores list. Show-me:
+    // the engine's breakdown. Then the bottom row (Submit/verdict or Next Hand).
+    const board = [renderModeToggle(), renderShow()];
+    if (state.mode === 'show') {
+        board.push(renderAnswer());
+    } else {
+        board.push(renderControls(), renderDeclared());
+    }
+    board.push(renderBottom());
 
     const kids = [
         h('h1', { class: 'pr-title' }, 'Hand Counting Tutorial'),
