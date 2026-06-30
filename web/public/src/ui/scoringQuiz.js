@@ -322,19 +322,17 @@ function renderDeclared() {
     return h('div', { class: 'sq-decl-list' }, ...rows);
 }
 
-// renderVerdict shows ONLY the correct/wrong graphic (no redundant text line that
-// repeats the score). Correctness is the cards-aware verdict computed in grade().
-function renderVerdict() {
-    const badge = state.result.correct
-        ? h('span', { class: 'pr-badge ok' }, '✓ correct')
-        : h('span', { class: 'pr-badge off' }, '✗ wrong');
-    return h('div', { class: 'sq-verdict' }, badge);
-}
-
 function renderActions() {
     if (state.result) {
-        return h('div', { class: 'sq-actions' },
-            h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'Deal again'));
+        // The correct/wrong graphic sits flush left on the same row as the New Hand
+        // button (no redundant text line that repeats the score). Correctness is the
+        // cards-aware verdict computed in grade().
+        const badge = state.result.correct
+            ? h('span', { class: 'pr-badge ok' }, '✓ correct')
+            : h('span', { class: 'pr-badge off' }, '✗ wrong');
+        return h('div', { class: 'sq-actions sq-result-bar' },
+            badge,
+            h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand'));
     }
     const submitBtn = h('button', {
         class: 'btn btn-primary', type: 'button',
@@ -348,8 +346,6 @@ function render() {
     const board = [renderShow()];
     if (!state.result) board.push(renderControls());
     board.push(renderDeclared(), renderActions());
-    // The verdict graphic sits at the bottom, below the declared/feedback list.
-    if (state.result) board.push(renderVerdict());
 
     const kids = [
         h('h1', { class: 'pr-title' }, 'Hand Counting Tutorial'),
