@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," /><!-- suppress the /favicon.ico request (a stray 404) -->
+  <title>Render Test — board as a projection of a View</title>
+  <!-- Same stylesheets the real game loads, so the board renders identically. -->
+  <link rel="stylesheet" href="/src/ui/cardFace.css" />
+  <link rel="stylesheet" href="/src/ui/styles.css" />
+  <style>
+    .devbar { font: 14px/1.5 system-ui, sans-serif; padding: 1rem 1.25rem; border-bottom: 1px solid #e3e3e3; }
+    .devbar h1 { font-size: 1.05rem; margin: 0 0 .25rem; }
+    .devbar p { margin: 0 0 .75rem; color: #666; }
+    .devbar .presets { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .75rem; }
+    .devbar button { font: inherit; padding: .35rem .65rem; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; }
+    .devbar button:hover { background: #f0f0f0; }
+    .devbar button.primary { border-color: #888; background: #f3f3f1; }
+    .devbar .editor { display: flex; gap: .75rem; align-items: flex-start; }
+    .devbar textarea { font: 12px/1.4 ui-monospace, Menlo, monospace; width: 100%; min-height: 150px; padding: .5rem; border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box; }
+    .devbar .seat-pick { display: flex; align-items: center; gap: .4rem; margin-bottom: .5rem; font-size: .9rem; }
+    .devbar .err { color: #b3261e; min-height: 1.2em; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <!-- Tell main.js NOT to boot a live game; expose the render harness instead.
+       Inline (classic) scripts run before deferred module scripts, so the flag is
+       set before main.js evaluates. -->
+  <script>window.__CRIBBAGER_NO_BOOT__ = true;</script>
+
+  <div class="devbar">
+    <h1>Render test</h1>
+    <p>Feeds an arbitrary server-shaped <code>View</code> through the live
+       <code>renderFromView</code> path — the exact code the multiplayer board uses
+       to project authoritative state. Pick a preset or paste/edit raw View JSON.</p>
+    <div class="seat-pick">
+      <label>My seat (server seat that is "me"):
+        <select id="seat"><option value="0">0</option><option value="1">1</option></select>
+      </label>
+    </div>
+    <div class="presets" id="presets"></div>
+    <div class="editor">
+      <textarea id="json" spellcheck="false"></textarea>
+      <button class="primary" id="render">Render this View ▸</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- main.js mounts the global header here and appends the felt/board to #app, so
+       the dev page provides the same scaffold the game page (game.html) does. -->
+  <header id="site-header"></header>
+  <div id="app"></div>
+
+  <script type="module" src="/dev/render-test.js"></script>
+</body>
+</html>

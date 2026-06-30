@@ -45,6 +45,35 @@ const clickButton = (page, re) => page.evaluate((src) => {
     [...document.querySelectorAll('.overlay .card-modal button')].find((b) => rx.test(b.textContent))?.click();
 }, re.source);
 
+// --- single-source-of-truth regression helpers ---
+// Each player's identity (game id + token + server seat), read from the same
+// localStorage the client persists. Captured while the game is live, because the
+// client clears this entry at game over.
+const creds = (page) => page.evaluate(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('game') || params.get('join');
+    const saved = (JSON.parse(localStorage.getItem('cribbager:games') || '{}')[id]) || {};
+    return { id, token: saved.token, seat: saved.seat };
+});
+// The two numbers in the game-over overlay, in the page's own [me, opponent] order.
+const overlayScores = (page) => page.evaluate(() => {
+    const p = document.querySelector('.overlay .card-modal p');
+    const nums = ((p && p.textContent) || '').match(/\d+/g) || [];
+    return nums.slice(0, 2).map(Number);
+});
+// The server's authoritative View.Scores (absolute [seat0, seat1]) for this seat's
+// token — an authenticated GET /games/{id} with that player's bearer token.
+const viewScores = (page, cred) => page.evaluate(async (c) => {
+    const res = await fetch('/games/' + c.id, { headers: { Authorization: 'Bearer ' + c.token } });
+    if (!res.ok) throw new Error('snapshot HTTP ' + res.status);
+    return (await res.json()).Scores; // absolute [seat0, seat1]
+}, cred);
+const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+// uiScores: reindex absolute [seat0, seat1] into the seat's [me, opp] view order.
+const ui = (abs, seat) => (seat === 0 ? [abs[0], abs[1]] : [abs[1], abs[0]]);
+// inverse: a seat's [me, opp] back into absolute [seat0, seat1].
+const toAbs = (mo, seat) => (seat === 0 ? [mo[0], mo[1]] : [mo[1], mo[0]]);
+
 try {
     // Host and joiner get ISOLATED browser contexts (separate localStorage) — they
     // are two different players. Sharing storage would make the joiner see the
@@ -85,6 +114,10 @@ try {
     console.log('opening opp face-down — host:', ho, ' join:', jo, '(expect 6 each)');
     if (ho !== 6 || jo !== 6) { console.log('❌ opening did not animate for both seats'); process.exitCode = 1; }
 
+    // Capture each player's id/token/seat NOW (the client clears this at game over),
+    // so we can authenticate a View fetch per seat for the score assertions below.
+    const hostCred = await creds(host), joinCred = await creds(joiner);
+
     // Drive both pages to game over.
     let hostOver = false, joinOver = false, acts = 0;
     for (let i = 0; i < 9000 && !(hostOver && joinOver); i++) {
@@ -102,7 +135,32 @@ try {
     console.log('join  game-over      :', await text(joiner));
     console.log('console/page errors  :', errors.length);
     for (const e of errors.slice(0, 8)) console.log('  ', e);
-    if (hostOver && joinOver && errors.length === 0) {
+
+    // Single-source-of-truth assertions (the point of this PR): the rendered score
+    // must be the server's authoritative View, not a locally-accumulated number that
+    // can drift between the two clients.
+    let scoreOk = true;
+    if (hostOver && joinOver) {
+        try {
+            const hOv = await overlayScores(host), jOv = await overlayScores(joiner); // each [me, opp]
+            // (a) Both players agree on the score (normalize to absolute seat order).
+            const hAbs = toAbs(hOv, hostCred.seat), jAbs = toAbs(jOv, joinCred.seat);
+            const agree = eq(hAbs, jAbs);
+            console.log('rendered (abs)       : host', hAbs, ' join', jAbs, agree ? '✓ agree' : '✗ DIVERGED');
+            if (!agree) scoreOk = false;
+            // (b) Each player's rendered score equals uiScores(View.Scores) for its seat.
+            const hView = await viewScores(host, hostCred), jView = await viewScores(joiner, joinCred);
+            const hMatch = eq(hOv, ui(hView, hostCred.seat)), jMatch = eq(jOv, ui(jView, joinCred.seat));
+            console.log('host  rendered/View  :', hOv, 'vs', ui(hView, hostCred.seat), hMatch ? '✓' : '✗');
+            console.log('join  rendered/View  :', jOv, 'vs', ui(jView, joinCred.seat), jMatch ? '✓' : '✗');
+            if (!hMatch || !jMatch) scoreOk = false;
+        } catch (e) {
+            console.log('❌ score assertion error:', e.message);
+            scoreOk = false;
+        }
+    }
+
+    if (hostOver && joinOver && errors.length === 0 && scoreOk) {
         console.log('✅ Human-vs-human playthrough PASSED');
     } else {
         console.log('❌ Human-vs-human playthrough FAILED');
