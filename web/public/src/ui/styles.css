@@ -627,18 +627,21 @@ button:active { transform: translateY(1px); }
 .sq-combo.is-wrong .sq-combo-call { text-decoration: line-through; }
 .sq-combo.is-wrong .sq-combo-cards { opacity: 0.5; }
 .sq-combo.is-missed .sq-combo-call { color: var(--color-ink); }
-.sq-combo-tag { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px;
-  font-weight: 700; color: var(--color-danger-ink); }
-.sq-decl-remove { background: none; border: 0; cursor: pointer; color: var(--color-ink-muted);
-  font-size: var(--text-md); line-height: 1; padding: 0 var(--space-1); margin-left: auto; }
-.sq-decl-remove:hover { color: var(--color-danger-ink); }
+/* Leading chip on each scoring line, flush left: the remove (✕) button before
+   grading; a green ✓ / red ✕ circle after. */
+.sq-status, .sq-decl-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto;
+  font-size: var(--text-sm); font-weight: 800; line-height: 1; padding: 0;
+}
+.sq-decl-remove { background: none; border: 1px solid var(--color-ink-muted); color: var(--color-ink-muted); cursor: pointer; }
+.sq-decl-remove:hover { color: var(--color-danger-ink); border-color: var(--color-danger-border); }
+.sq-status.ok { color: var(--color-success); background: var(--color-success-bg); border: 1px solid var(--color-success-border); }
+.sq-status.bad { color: var(--color-danger-ink); background: var(--color-danger-bg); border: 1px solid var(--color-danger-border); }
 
 /* Bottom row: the scoring form (or, once graded, the verdict graphic) grows on the
    left; the Submit Score / New Hand button stays on the right. */
 .sq-footer { display: flex; align-items: flex-start; gap: var(--space-2); flex-wrap: wrap; }
-.sq-footer > .sq-controls, .sq-footer > .sq-builder, .sq-footer > .sq-verdict { flex: 1 1 auto; }
+.sq-footer > .sq-controls, .sq-footer > .sq-builder { flex: 1 1 auto; }
 .sq-footer > .btn { flex: 0 0 auto; }
 .sq-footer .input, .sq-footer .btn, .sq-footer select { height: 42px; box-sizing: border-box; margin: 0; }
-/* The cards-aware Correct/Not-quite pill, flush left on the footer row. */
-.sq-verdict { display: flex; align-items: center; justify-content: flex-start; min-height: 42px; }
-.sq-verdict .pr-badge { margin-left: 0; font-size: var(--text-md); }

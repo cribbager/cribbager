@@ -377,8 +377,12 @@ function renderShow() {
 }
 
 function renderControls() {
+    // After grading the form stays in place (disabled) so the row doesn't collapse
+    // and the board height holds steady — no jump on submit.
+    const locked = !!state.result;
     const kindSel = h('select', {
         class: 'input sq-kind', 'aria-label': 'Combo type',
+        ...(locked ? { disabled: 'disabled' } : {}),
         // Runs are explicit "Run of N" entries now, so changing the kind no longer
         // toggles any other control — just record the selection.
         onchange: (e) => { state.kindId = e.target.value; },
@@ -387,11 +391,12 @@ function renderControls() {
     const countInput = h('input', {
         type: 'number', min: '1', class: 'input sq-count', placeholder: 'total count',
         'aria-label': 'Total count', value: state.count,
+        ...(locked ? { disabled: 'disabled' } : {}),
         oninput: (e) => { state.count = e.target.value; },
         onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addDeclaration(); } },
     });
 
-    const addBtn = h('button', { class: 'btn', type: 'button', onclick: addDeclaration }, 'Add to score');
+    const addBtn = h('button', { class: 'btn', type: 'button', ...(locked ? { disabled: 'disabled' } : {}), onclick: addDeclaration }, 'Add to score');
 
     // Reads as "[kind dropdown] for [total count]" — the literal "for" sits between
     // the selector and the count input.
@@ -410,18 +415,24 @@ function comboLine(cards, phrase, forNumber, opts = {}) {
     const cls = 'sq-combo'
         + (opts.wrong ? ' is-wrong' : '')
         + (opts.missed ? ' is-missed' : '');
-    const kids = [
-        h('span', { class: 'sq-combo-cards' }, ...sortCards(cards).map((c) => cardFace(c, { small: true }))),
-        h('span', { class: 'sq-combo-call' }, `${phrase} for ${forNumber}`),
-    ];
-    if (opts.missed) kids.push(h('span', { class: 'sq-combo-tag' }, 'missed'));
+    // Leading chip, flush left: before grading it's the remove (✕) button; after
+    // grading it's a green circled check (correct) or red circled ✕ (wrong/missed).
+    let lead;
     if (opts.onRemove) {
-        kids.push(h('button', {
+        lead = h('button', {
             class: 'sq-decl-remove', type: 'button', 'aria-label': 'Remove this combo',
             onclick: opts.onRemove,
-        }, '✕'));
+        }, '✕');
+    } else if (opts.status === 'correct') {
+        lead = h('span', { class: 'sq-status ok', 'aria-label': 'correct' }, '✓');
+    } else {
+        lead = h('span', { class: 'sq-status bad', 'aria-label': opts.status === 'missed' ? 'missed' : 'wrong' }, '✕');
     }
-    return h('div', { class: cls }, ...kids);
+    return h('div', { class: cls },
+        lead,
+        h('span', { class: 'sq-combo-cards' }, ...sortCards(cards).map((c) => cardFace(c, { small: true }))),
+        h('span', { class: 'sq-combo-call' }, `${phrase} for ${forNumber}`),
+    );
 }
 
 // renderDeclared lists the combos inline (no panel, no heading). Before grading
@@ -436,11 +447,11 @@ function renderDeclared() {
             // there); wrong ones show what the user entered, struck through. The
             // phrase comes from the user's chosen kind ("double run of 3").
             const forN = d.correct ? d.correctCount : d.count;
-            rows.push(comboLine(d.cards, callPhrase(d.kindId), forN, { wrong: !d.correct }));
+            rows.push(comboLine(d.cards, callPhrase(d.kindId), forN, { wrong: !d.correct, status: d.correct ? 'correct' : 'wrong' }));
         }
         for (const m of state.result.missed) {
             // Missed lines are atomic, so they read as the bare atom ("run of 3").
-            rows.push(comboLine(m.cards, atomPhrase(m), m.correctCount, { missed: true }));
+            rows.push(comboLine(m.cards, atomPhrase(m), m.correctCount, { missed: true, status: 'missed' }));
         }
     } else {
         state.declarations.forEach((d, i) => {
@@ -453,41 +464,27 @@ function renderDeclared() {
     return h('div', { class: 'sq-decl-list' }, ...rows);
 }
 
-// renderVerdict shows ONLY the correct/incorrect graphic (no redundant text line
-// that repeats the score). It occupies the same slot the scoring form did — so
-// submitting swaps form → verdict in place with no layout jump. Correctness is the
-// cards-aware verdict computed in grade().
-function renderVerdict() {
-    const badge = state.result.correct
-        ? h('span', { class: 'pr-badge ok' }, '✓ Correct')
-        : h('span', { class: 'pr-badge off' }, 'Not quite');
-    return h('div', { class: 'sq-verdict' }, badge);
-}
-
-// renderFooter is the single bottom row: the scoring form on the left and the
-// Submit Score button on the right. After grading it becomes the verdict graphic
-// on the left and the New Hand button on the right (result on the same row as the
-// button it replaces).
-function renderFooter() {
-    if (state.result) {
-        return h('div', { class: 'sq-footer' },
-            renderVerdict(),
-            h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand'));
-    }
-    // The button previews the score that will be submitted: the running count of the
-    // last declared combo (0 before anything is added).
-    const submitBtn = h('button', {
-        class: 'btn btn-primary', type: 'button',
-        ...(state.busy ? { disabled: 'disabled' } : {}),
-        onclick: submit,
-    }, state.busy ? 'Scoring…' : `Submit Score (${declaredTotal()})`);
-    return h('div', { class: 'sq-footer' }, renderControls(), submitBtn);
+// renderForm is the row directly under the deck: the scoring form on the left and
+// the Submit Score button on the right. After grading the form stays put (disabled,
+// so the row keeps its height — no collapse/jump) and the button becomes New Hand.
+// Per-line ✓/✕ chips in the list below carry the verdict now, so there's no
+// separate overall pill.
+function renderForm() {
+    const btn = state.result
+        ? h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand')
+        : h('button', {
+            // The button previews the score to be submitted: the running count of
+            // the last declared combo (0 before anything is added).
+            class: 'btn btn-primary', type: 'button',
+            ...(state.busy ? { disabled: 'disabled' } : {}),
+            onclick: submit,
+        }, state.busy ? 'Scoring…' : `Submit Score (${declaredTotal()})`);
+    return h('div', { class: 'sq-footer' }, renderControls(), btn);
 }
 
 function render() {
-    // Cards on top, the added-scores list in the middle, and a single bottom row
-    // holding the form + Submit Score (→ verdict + New Hand once graded).
-    const board = [renderShow(), renderDeclared(), renderFooter()];
+    // Deck on top, the form directly under it, then the added-scores list below.
+    const board = [renderShow(), renderForm(), renderDeclared()];
 
     const kids = [
         h('h1', { class: 'pr-title' }, 'Hand Counting Tutorial'),
