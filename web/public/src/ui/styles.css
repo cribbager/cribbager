@@ -611,7 +611,17 @@ button:active { transform: translateY(1px); }
 /* Inline declared/combo list — no panel, no heading. */
 .sq-decl-list { display: flex; flex-direction: column; gap: var(--space-2); }
 .sq-combo { display: flex; align-items: center; gap: var(--space-2); }
-.sq-combo-cards { display: inline-flex; gap: var(--space-1); flex-wrap: wrap; }
+/* Combo cards are small reference thumbnails — scale them down via the card-size
+   vars (cascades to the .card children; tweak --card-scale to resize). */
+.sq-combo-cards {
+  display: inline-flex; gap: var(--space-1); flex-wrap: wrap;
+  --card-scale: 0.6;
+  --card-w: calc(70px * var(--card-scale));
+  --card-h: calc(98px * var(--card-scale));
+  --card-rank-size: calc(18px * var(--card-scale));
+  --card-suit-size: calc(14px * var(--card-scale));
+  --card-pip-size: calc(32px * var(--card-scale));
+}
 .sq-combo-call { font-weight: 700; }
 .sq-combo.is-wrong { color: var(--color-ink-muted); }
 .sq-combo.is-wrong .sq-combo-call { text-decoration: line-through; }
