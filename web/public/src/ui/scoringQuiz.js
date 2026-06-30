@@ -338,9 +338,14 @@ function renderVerdict() {
     return h('div', { class: 'sq-verdict' }, badge);
 }
 
-function renderActions() {
+// renderFooter is the single bottom row: the scoring form on the left and the
+// Submit Score button on the right. After grading it becomes the verdict graphic
+// on the left and the New Hand button on the right (result on the same row as the
+// button it replaces).
+function renderFooter() {
     if (state.result) {
-        return h('div', { class: 'sq-actions' },
+        return h('div', { class: 'sq-footer' },
+            renderVerdict(),
             h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand'));
     }
     // The button previews the score that will be submitted: the running count of the
@@ -350,15 +355,13 @@ function renderActions() {
         ...(state.busy ? { disabled: 'disabled' } : {}),
         onclick: submit,
     }, state.busy ? 'Scoring…' : `Submit Score (${declaredTotal()})`);
-    return h('div', { class: 'sq-actions' }, submitBtn);
+    return h('div', { class: 'sq-footer' }, renderControls(), submitBtn);
 }
 
 function render() {
-    // The scoring form and the verdict share one slot (right under the cards), so
-    // submitting swaps the form out for the verdict in place — no layout jump.
-    const board = [renderShow()];
-    board.push(state.result ? renderVerdict() : renderControls());
-    board.push(renderDeclared(), renderActions());
+    // Cards on top, the added-scores list in the middle, and a single bottom row
+    // holding the form + Submit Score (→ verdict + New Hand once graded).
+    const board = [renderShow(), renderDeclared(), renderFooter()];
 
     const kids = [
         h('h1', { class: 'pr-title' }, 'Hand Counting Tutorial'),
