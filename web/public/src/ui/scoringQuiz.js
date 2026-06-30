@@ -389,8 +389,8 @@ function renderControls() {
     }, ...KINDS.map((k) => h('option', { value: k.id, ...(k.id === state.kindId ? { selected: 'selected' } : {}) }, k.label)));
 
     const countInput = h('input', {
-        type: 'number', min: '1', class: 'input sq-count', placeholder: 'total count',
-        'aria-label': 'Total count', value: state.count,
+        type: 'number', min: '1', class: 'input sq-count', placeholder: 'count',
+        'aria-label': 'Count', value: state.count,
         ...(locked ? { disabled: 'disabled' } : {}),
         oninput: (e) => { state.count = e.target.value; },
         onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addDeclaration(); } },
@@ -464,27 +464,32 @@ function renderDeclared() {
     return h('div', { class: 'sq-decl-list' }, ...rows);
 }
 
-// renderForm is the row directly under the deck: the scoring form on the left and
-// the Submit Score button on the right. After grading the form stays put (disabled,
-// so the row keeps its height — no collapse/jump) and the button becomes New Hand.
-// Per-line ✓/✕ chips in the list below carry the verdict now, so there's no
-// separate overall pill.
-function renderForm() {
-    const btn = state.result
-        ? h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand')
-        : h('button', {
-            // The button previews the score to be submitted: the running count of
-            // the last declared combo (0 before anything is added).
-            class: 'btn btn-primary', type: 'button',
-            ...(state.busy ? { disabled: 'disabled' } : {}),
-            onclick: submit,
-        }, state.busy ? 'Scoring…' : `Submit Score (${declaredTotal()})`);
-    return h('div', { class: 'sq-footer' }, renderControls(), btn);
+// renderBottom is the bottom row. Before grading: the Submit Score button on the
+// left. After grading: the Submit button is replaced in place (bottom left) by the
+// overall Correct / Not-quite graphic, with the New Hand button at the right.
+function renderBottom() {
+    if (state.result) {
+        const verdict = state.result.correct
+            ? h('span', { class: 'pr-badge ok' }, '✓ Correct')
+            : h('span', { class: 'pr-badge off' }, 'Not quite');
+        return h('div', { class: 'sq-bottom' },
+            verdict,
+            h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand'));
+    }
+    // The button previews the score to be submitted: the running count of the last
+    // declared combo (0 before anything is added).
+    const submitBtn = h('button', {
+        class: 'btn btn-primary', type: 'button',
+        ...(state.busy ? { disabled: 'disabled' } : {}),
+        onclick: submit,
+    }, state.busy ? 'Scoring…' : `Submit Score (${declaredTotal()})`);
+    return h('div', { class: 'sq-bottom' }, submitBtn);
 }
 
 function render() {
-    // Deck on top, the form directly under it, then the added-scores list below.
-    const board = [renderShow(), renderForm(), renderDeclared()];
+    // Deck on top, the form directly under it, the added-scores list, then the
+    // bottom row (Submit Score → verdict + New Hand once graded).
+    const board = [renderShow(), renderControls(), renderDeclared(), renderBottom()];
 
     const kids = [
         h('h1', { class: 'pr-title' }, 'Hand Counting Tutorial'),
