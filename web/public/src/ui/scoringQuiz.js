@@ -136,14 +136,19 @@ function removeDeclaration(idx) {
 // sorted) used to match a declaration against an engine combo.
 const cardKey = (cards) => cards.map(cardCode).sort().join(',');
 
+// declaredTotal is the score the user has entered so far: the running count of the
+// last combo declared, or 0 with none (a legitimate claim — some hands score
+// nothing). Drives both the Submit Score button label and grading, so they agree.
+function declaredTotal() {
+    return state.declarations.length
+        ? state.declarations[state.declarations.length - 1].count
+        : 0;
+}
+
 async function submit() {
     if (state.busy || state.result) return;
 
-    // The user's total is the running count of the last combo declared; with no
-    // declarations that's 0 (a legitimate claim — some hands score nothing).
-    const declTotal = state.declarations.length
-        ? state.declarations[state.declarations.length - 1].count
-        : 0;
+    const declTotal = declaredTotal();
 
     state.busy = true;
     state.error = null;
@@ -338,11 +343,13 @@ function renderActions() {
         return h('div', { class: 'sq-actions' },
             h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand'));
     }
+    // The button previews the score that will be submitted: the running count of the
+    // last declared combo (0 before anything is added).
     const submitBtn = h('button', {
         class: 'btn btn-primary', type: 'button',
         ...(state.busy ? { disabled: 'disabled' } : {}),
         onclick: submit,
-    }, state.busy ? 'Scoring…' : 'Submit count');
+    }, state.busy ? 'Scoring…' : `Submit Score (${declaredTotal()})`);
     return h('div', { class: 'sq-actions' }, submitBtn);
 }
 
