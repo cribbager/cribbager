@@ -623,12 +623,12 @@ button:active { transform: translateY(1px); }
   font-size: var(--text-md); line-height: 1; padding: 0 var(--space-1); margin-left: auto; }
 .sq-decl-remove:hover { color: var(--color-danger-ink); }
 
-/* Overall verdict graphic (the cards-aware Correct/Wrong pill), shown alone at the
-   bottom of the page below the declared/feedback list — no redundant text line.
-   The action row holds the Submit button, or after grading the New Hand button. */
-.sq-actions { display: flex; align-items: stretch; justify-content: flex-end; gap: var(--space-2); }
-/* The verdict occupies the scoring form's slot (same min-height) so submit doesn't
-   jump; the graphic is flush left. */
+/* Bottom row: the scoring form (or, once graded, the verdict graphic) grows on the
+   left; the Submit Score / New Hand button stays on the right. */
+.sq-footer { display: flex; align-items: flex-start; gap: var(--space-2); flex-wrap: wrap; }
+.sq-footer > .sq-controls, .sq-footer > .sq-builder, .sq-footer > .sq-verdict { flex: 1 1 auto; }
+.sq-footer > .btn { flex: 0 0 auto; }
+.sq-footer .input, .sq-footer .btn, .sq-footer select { height: 42px; box-sizing: border-box; margin: 0; }
+/* The cards-aware Correct/Not-quite pill, flush left on the footer row. */
 .sq-verdict { display: flex; align-items: center; justify-content: flex-start; min-height: 42px; }
 .sq-verdict .pr-badge { margin-left: 0; font-size: var(--text-md); }
-.sq-actions > .input, .sq-actions > .btn { height: 42px; box-sizing: border-box; margin: 0; }
