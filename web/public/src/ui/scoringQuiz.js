@@ -1,20 +1,17 @@
 // Scoring quiz (A6) — a standalone practice surface, NOT a live game. You are
-// dealt four cards plus a starter (the cut, shown distinguished), and you count
-// the show yourself: select the cards forming each combo, declare what it is and
-// what it's worth, and build up your total in the scoring area. Submit grades
-// your declared total against the engine and reveals the full breakdown, so you
-// learn what you missed. This is exactly where teaching belongs — official games
-// carry no in-game coaching.
-//
-// A combined combo is declared as ONE group: a double run is a single selection
-// of all its cards, not a run plus a separately-marked pair. Grading reuses the
-// engine itself via POST /tools/score-hand (scoring/hand.Score on the server); no
-// scoring is reimplemented here — the user supplies the count, the engine the
-// truth.
+// dealt four cards plus a starter (the cut, shown set apart and labelled), and
+// you count the show yourself: select the cards forming each combo, declare what
+// it is and what it's worth, then enter your own total and submit. Grading runs
+// the engine via POST /tools/score-hand (scoring/hand.Score on the server) — no
+// scoring is reimplemented here. The verdict is rendered in place over the list
+// you built: your total is marked Correct/Wrong against the engine, declarations
+// that don't match an engine combo are crossed out, and combos you missed are
+// appended. This is exactly where teaching belongs — official games carry no
+// in-game coaching.
 
 import { mountHeader } from './header.js';
 import { cardFace } from './cardFace.js';
-import { parseCard, cardCode, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
+import { parseCard, cardCode, sortCards } from '../engine/cards.js';
 
 // tiny DOM helper (matches the on*-listener + text-node style used elsewhere)
 function h(tag, attrs = {}, ...kids) {
@@ -31,31 +28,22 @@ function h(tag, attrs = {}, ...kids) {
 const root = document.getElementById('scoring-quiz');
 mountHeader();
 
-// isRed mirrors cardFace's own suit colouring (diamonds, hearts).
-const isRed = (c) => c.suit === 1 || c.suit === 2;
-
-// The combo kinds the user can declare. Labels are presentation-only; the engine
-// is the authority on points (the user supplies their own count to be graded).
+// The combo kinds the user can declare — exactly the simple scoring elements.
+// TODO: add guidance for double runs and three/four-of-a-kind; until then those
+// stay out of the picker and the engine's bundled run combos surface as "missed".
 const KINDS = [
     { id: 'fifteen', label: 'Fifteen' },
     { id: 'pair', label: 'Pair' },
     { id: 'run', label: 'Run' },
+    { id: 'nobs', label: 'Nobs' },
     { id: 'flush', label: 'Flush' },
-    { id: 'nobs', label: 'His nobs' },
-    { id: 'other', label: 'Other' },
 ];
-const kindLabel = (id) => (KINDS.find((k) => k.id === id) || { label: id }).label;
-
-// cardLabel is a compact rank+suit chip (suit-coloured), reused from the discard
-// trainer's vocabulary for the verdict and scoring-area sentences.
-function cardLabel(c) {
-    return h('span', { class: 'pr-chip ' + (isRed(c) ? 'red' : 'black') },
-        RANK_LABELS[c.rank] + SUIT_SYMBOLS[c.suit]);
-}
-const cardLabels = (cards) => cards.map(cardLabel);
+// How each kind is called aloud in the rendered "[cards] <call> for N" line.
+const CALL = { fifteen: 'fifteen', pair: 'pair', run: 'run', nobs: 'nobs', flush: 'flush' };
+const callWord = (kind) => CALL[kind] || kind;
 
 // dealShow returns five distinct random cards by shuffling a fresh 52-card deck:
-// the first four are the hand, the fifth is the starter (cut) card.
+// the first four are the hand (sorted for display), the fifth is the starter.
 function dealShow() {
     const deck = [];
     for (let rank = 1; rank <= 13; rank++) {
@@ -65,21 +53,23 @@ function dealShow() {
         const j = Math.floor(Math.random() * (i + 1));
         [deck[i], deck[j]] = [deck[j], deck[i]];
     }
-    return deck.slice(0, 5);
+    return [...sortCards(deck.slice(0, 4)), deck[4]];
 }
 
 // --- view state ---------------------------------------------------------------
 // Cards are indexed 0..4 across the show; index 4 is the starter (the cut).
 const STARTER = 4;
 const state = {
-    cards: [],            // five {rank, suit}: [0..3] hand, [4] starter
+    cards: [],            // five {rank, suit}: [0..3] sorted hand, [4] starter
     selected: new Set(),  // indices into cards currently picked for a declaration
     kind: 'fifteen',      // the kind for the next declaration
     points: '',           // the points the user claims for the next declaration
+    total: '',            // the user's own total count, graded against the engine
     declarations: [],     // [{ kind, idxs:[...], points:int }]
-    result: null,         // the engine's graded breakdown, or null before submit
+    result: null,         // graded verdict { total, declTotal, declared:[...], missed:[...] }, or null
     busy: false,          // a /tools/score-hand request is in flight
-    error: null,          // a friendly error message, or null
+    builderError: null,   // inline reason an "Add to score" was rejected, or null
+    error: null,          // a friendly request-level error message, or null
 };
 
 function newDeal() {
@@ -87,10 +77,12 @@ function newDeal() {
     state.selected = new Set();
     state.kind = 'fifteen';
     state.points = '';
+    state.total = '';
     state.declarations = [];
     state.result = null;
-    state.error = null;
     state.busy = false;
+    state.builderError = null;
+    state.error = null;
     render();
 }
 
@@ -98,17 +90,29 @@ function toggleSelect(i) {
     if (state.result) return; // locked once graded; deal again to retry
     if (state.selected.has(i)) state.selected.delete(i);
     else state.selected.add(i);
+    state.builderError = null;
     render();
 }
 
-// addDeclaration commits the current selection + kind + points as one scored
-// group (a double run is added as a single group of all its cards).
+// addDeclaration commits the current selection + kind + points as one combo.
+// Validation lives here (not in a disabled button) so the action never silently
+// no-ops: invalid input surfaces a brief inline reason instead.
 function addDeclaration() {
     const pts = parseInt(state.points, 10);
-    if (state.selected.size === 0 || !Number.isFinite(pts) || pts < 1) return;
+    if (state.selected.size === 0) {
+        state.builderError = 'Select the card(s) forming the combo first.';
+        render();
+        return;
+    }
+    if (!Number.isFinite(pts) || pts < 1) {
+        state.builderError = 'Enter the points for this combo.';
+        render();
+        return;
+    }
     state.declarations.push({ kind: state.kind, idxs: [...state.selected].sort((a, b) => a - b), points: pts });
     state.selected = new Set();
     state.points = '';
+    state.builderError = null;
     render();
 }
 
@@ -118,10 +122,19 @@ function removeDeclaration(idx) {
     render();
 }
 
-const declaredTotal = () => state.declarations.reduce((sum, d) => sum + d.points, 0);
+// cardKey is an order-independent identity for a set of cards (their wire codes,
+// sorted) used to match a declaration against an engine combo.
+const cardKey = (cards) => cards.map(cardCode).sort().join(',');
 
 async function submit() {
     if (state.busy || state.result) return;
+    const total = parseInt(state.total, 10);
+    if (!Number.isFinite(total) || total < 0) {
+        state.error = 'Enter your total count before submitting.';
+        render();
+        return;
+    }
+
     state.busy = true;
     state.error = null;
     render();
@@ -158,8 +171,39 @@ async function submit() {
     }
 
     state.busy = false;
-    state.result = { total: data.total || 0, combos: data.combos || [], declared: declaredTotal() };
+    state.result = grade(total, data.combos || [], data.total || 0);
     render();
+}
+
+// grade matches each declaration to an engine combo by kind + card-set equality
+// (order-independent), EXCEPT nobs: a nobs declaration is lenient — it's correct
+// whenever the engine reports a nobs at all, regardless of which card(s) the user
+// picked (Jack, Jack+starter, or starter), since nobs attribution is ambiguous.
+function grade(total, rawCombos, engineTotal) {
+    const engine = rawCombos.map((c) => ({
+        kind: c.kind,
+        points: c.points,
+        cards: (c.cards || []).map(parseCard),
+        used: false,
+    }));
+
+    const declared = state.declarations.map((d) => {
+        const cards = d.idxs.map((idx) => state.cards[idx]);
+        let match;
+        if (d.kind === 'nobs') {
+            match = engine.find((e) => !e.used && e.kind === 'nobs');
+        } else {
+            const key = cardKey(cards);
+            match = engine.find((e) => !e.used && e.kind === d.kind && cardKey(e.cards) === key);
+        }
+        if (match) match.used = true;
+        return { kind: d.kind, cards, points: d.points, correct: !!match };
+    });
+
+    const missed = engine.filter((e) => !e.used)
+        .map((e) => ({ kind: e.kind, cards: e.cards, points: e.points }));
+
+    return { total: engineTotal, declTotal: total, declared, missed };
 }
 
 // --- rendering ----------------------------------------------------------------
@@ -167,7 +211,8 @@ function renderShow() {
     const cards = state.cards.map((c, i) => {
         const sel = state.selected.has(i);
         const locked = !!state.result;
-        const extra = (i === STARTER ? 'sq-starter ' : '') + (locked ? '' : 'selectable' + (sel ? ' selected' : ''));
+        const isStarter = i === STARTER;
+        const extra = locked ? '' : 'selectable' + (sel ? ' selected' : '');
         const face = cardFace(c, { extra: extra.trim() });
         if (!locked) {
             face.setAttribute('role', 'button');
@@ -176,14 +221,14 @@ function renderShow() {
             face.addEventListener('click', () => toggleSelect(i));
             face.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSelect(i); } });
         }
-        const wrap = h('div', { class: 'sq-card-slot' }, face);
-        if (i === STARTER) wrap.append(h('span', { class: 'sq-starter-tag' }, 'Starter'));
+        const wrap = h('div', { class: 'sq-card-slot' + (isStarter ? ' is-starter' : '') }, face);
+        if (isStarter) wrap.append(h('span', { class: 'sq-starter-tag' }, 'Starter'));
         return wrap;
     });
     return h('div', { class: 'sq-show' }, ...cards);
 }
 
-function renderBuilder() {
+function renderControls() {
     const kindSel = h('select', {
         class: 'input sq-kind', 'aria-label': 'Combo type',
         onchange: (e) => { state.kind = e.target.value; },
@@ -196,129 +241,109 @@ function renderBuilder() {
         onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addDeclaration(); } },
     });
 
-    const n = state.selected.size;
-    const canAdd = n > 0 && parseInt(state.points, 10) >= 1;
-    const addBtn = h('button', {
-        class: 'btn', type: 'button',
-        ...(canAdd ? {} : { disabled: 'disabled' }),
-        onclick: addDeclaration,
-    }, 'Add to score');
+    const addBtn = h('button', { class: 'btn', type: 'button', onclick: addDeclaration }, 'Add to score');
 
-    const hint = n === 0
-        ? 'Select the cards forming a combo, choose its type, and enter the points.'
-        : `${n} card${n === 1 ? '' : 's'} selected.`;
-
-    return h('div', { class: 'sq-builder' },
-        h('div', { class: 'sq-builder-row' }, kindSel, ptsInput, addBtn),
-        h('span', { class: 'pr-hint' }, hint));
+    const row = h('div', { class: 'sq-controls' }, kindSel, ptsInput, addBtn);
+    return state.builderError
+        ? h('div', { class: 'sq-builder' }, row, h('span', { class: 'sq-builder-error' }, state.builderError))
+        : row;
 }
 
-function renderScoringArea() {
-    const items = state.declarations.map((d, i) => {
-        const cards = d.idxs.map((idx) => state.cards[idx]);
-        const row = h('div', { class: 'sq-decl' },
-            h('span', { class: 'sq-decl-kind' }, kindLabel(d.kind)),
-            h('span', { class: 'sq-decl-cards' }, ...cardLabels(cards)),
-            h('span', { class: 'sq-decl-pts' }, `${d.points} pt${d.points === 1 ? '' : 's'}`));
-        if (!state.result) {
-            row.append(h('button', {
-                class: 'sq-decl-remove', type: 'button', 'aria-label': 'Remove this combo',
-                onclick: () => removeDeclaration(i),
-            }, '✕'));
+// comboLine renders one combo as real card faces followed by how it's called:
+// "[faces] fifteen for 2". opts.wrong crosses it out; opts.missed marks it as one
+// the user didn't declare.
+function comboLine(cards, kind, points, opts = {}) {
+    const cls = 'sq-combo'
+        + (opts.wrong ? ' is-wrong' : '')
+        + (opts.missed ? ' is-missed' : '');
+    const kids = [
+        h('span', { class: 'sq-combo-cards' }, ...sortCards(cards).map((c) => cardFace(c, { small: true }))),
+        h('span', { class: 'sq-combo-call' }, `${callWord(kind)} for ${points}`),
+    ];
+    if (opts.missed) kids.push(h('span', { class: 'sq-combo-tag' }, 'missed'));
+    if (opts.onRemove) {
+        kids.push(h('button', {
+            class: 'sq-decl-remove', type: 'button', 'aria-label': 'Remove this combo',
+            onclick: opts.onRemove,
+        }, '✕'));
+    }
+    return h('div', { class: cls }, ...kids);
+}
+
+// renderDeclared lists the combos inline (no panel, no heading). Before grading
+// it's the editable declaration list; after grading the same list is mutated in
+// place — wrong combos crossed out, missed combos appended.
+function renderDeclared() {
+    const rows = [];
+
+    if (state.result) {
+        for (const d of state.result.declared) {
+            rows.push(comboLine(d.cards, d.kind, d.points, { wrong: !d.correct }));
         }
-        return row;
-    });
-    const body = items.length
-        ? h('div', { class: 'sq-decl-list' }, ...items)
-        : h('p', { class: 'pr-message-body' }, 'No combos declared yet.');
-    return h('div', { class: 'sq-scoring' },
-        h('div', { class: 'sq-scoring-head' },
-            h('span', { class: 'sq-scoring-title' }, 'Scoring area'),
-            h('span', { class: 'sq-total' }, `Your total: ${declaredTotal()}`)),
-        body);
+        for (const m of state.result.missed) {
+            rows.push(comboLine(m.cards, m.kind, m.points, { missed: true }));
+        }
+    } else {
+        state.declarations.forEach((d, i) => {
+            const cards = d.idxs.map((idx) => state.cards[idx]);
+            rows.push(comboLine(cards, d.kind, d.points, { onRemove: () => removeDeclaration(i) }));
+        });
+    }
+
+    if (!rows.length) {
+        return h('p', { class: 'sq-empty' }, 'No combos declared yet.');
+    }
+    return h('div', { class: 'sq-decl-list' }, ...rows);
+}
+
+function renderVerdict() {
+    const { total, declTotal } = state.result;
+    const correct = declTotal === total;
+    const badge = correct
+        ? h('span', { class: 'pr-badge ok' }, '✓ correct')
+        : h('span', { class: 'pr-badge off' }, '✗ wrong');
+    const headline = correct
+        ? `Correct — the hand scores ${total}.`
+        : `Wrong — you counted ${declTotal}, the hand scores ${total}.`;
+    return h('div', { class: 'sq-verdict' },
+        h('span', { class: 'sq-verdict-text' }, headline),
+        badge);
 }
 
 function renderActions() {
     if (state.result) {
-        return h('div', { class: 'pr-actions' },
+        return h('div', { class: 'sq-actions' },
             h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'Deal again'));
     }
+    const totalInput = h('input', {
+        type: 'number', min: '0', class: 'input sq-total-input', placeholder: 'Total',
+        'aria-label': 'Your total count', value: state.total,
+        oninput: (e) => { state.total = e.target.value; },
+        onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } },
+    });
     const submitBtn = h('button', {
         class: 'btn btn-primary', type: 'button',
         ...(state.busy ? { disabled: 'disabled' } : {}),
         onclick: submit,
     }, state.busy ? 'Scoring…' : 'Submit count');
-    return h('div', { class: 'pr-actions' },
-        h('span', { class: 'pr-hint' }, 'Declare every combo, then submit your count.'),
-        submitBtn);
-}
-
-// comboLabel renders one engine combo as a teachable line: a name (with run shape),
-// its cards, and its points.
-function comboLabel(combo) {
-    let name = kindLabel(combo.kind);
-    if (combo.kind === 'run') {
-        const shape = combo.multiplicity === 2 ? 'Double run'
-            : combo.multiplicity === 3 ? 'Triple run'
-                : combo.multiplicity >= 4 ? 'Double-double run'
-                    : `Run of ${combo.run_length}`;
-        name = shape;
-    }
-    const cards = (combo.cards || []).map(parseCard);
-    return h('div', { class: 'pr-line' },
-        h('span', { class: 'pr-line-label' }, name + ' '),
-        ...cardLabels(cards),
-        h('span', { class: 'pr-ev' }, ` — ${combo.points} pt${combo.points === 1 ? '' : 's'}`));
-}
-
-function renderVerdict() {
-    const { total, combos, declared } = state.result;
-    const correct = declared === total;
-    const delta = declared - total;
-
-    const badge = correct
-        ? h('span', { class: 'pr-badge ok' }, '✓ correct')
-        : h('span', { class: 'pr-badge off' }, `${delta > 0 ? '+' : ''}${delta}`);
-
-    const headline = correct
-        ? `Correct — the hand scores ${total}.`
-        : delta > 0
-            ? `You declared ${declared}, but the hand scores ${total} (over by ${delta}).`
-            : `You declared ${declared}, but the hand scores ${total} (missed ${-delta}).`;
-
-    const kids = [
-        h('div', { class: 'pr-verdict-head' },
-            h('span', { class: 'pr-rank' }, headline),
-            badge),
-    ];
-
-    if (combos.length) {
-        kids.push(h('div', { class: 'sq-breakdown' }, ...combos.map(comboLabel)));
-    } else {
-        kids.push(h('p', { class: 'pr-verdict-note' }, 'This hand scores nothing — a clean zero.'));
-    }
-    kids.push(h('p', { class: 'pr-verdict-note' },
-        'A double/triple run is one combo whose points already include the pairs it makes.'));
-
-    return h('div', { class: 'panel pr-verdict' + (correct ? ' is-optimal' : '') }, ...kids);
+    return h('div', { class: 'sq-actions' }, totalInput, submitBtn);
 }
 
 function render() {
     const board = [renderShow()];
-    if (!state.result) board.push(renderBuilder());
-    board.push(renderScoringArea(), renderActions());
+    if (!state.result) board.push(renderControls());
+    if (state.result) board.push(renderVerdict());
+    board.push(renderDeclared(), renderActions());
 
     const kids = [
         h('h1', { class: 'pr-title' }, 'Scoring quiz'),
-        h('p', { class: 'pr-subtitle' }, 'You’re dealt four cards and a starter. Count the show: declare each combo and its points, then submit to check against the engine.'),
+        h('p', { class: 'pr-subtitle' }, 'You’re dealt four cards and a starter. Count the show, then check your total against the engine.'),
         h('div', { class: 'panel pr-board' }, ...board),
     ];
     if (state.error) {
         kids.push(h('div', { class: 'panel pr-message' },
-            h('p', { class: 'pr-message-body' }, state.error),
-            h('button', { class: 'btn btn-primary', type: 'button', onclick: submit }, 'Try again')));
+            h('p', { class: 'pr-message-body' }, state.error)));
     }
-    if (state.result) kids.push(renderVerdict());
     root.replaceChildren(...kids);
 }
 
