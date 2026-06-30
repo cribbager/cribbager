@@ -1,14 +1,17 @@
-// Scoring quiz (A6) — a standalone practice surface, NOT a live game. You are
+// Hand Counting Tutorial (A6) — a standalone practice surface, NOT a live game. You are
 // dealt four cards plus a starter (the cut, shown set apart and labelled), and
 // you count the show yourself the way you'd count aloud: select the cards forming
 // each combo, declare what it is, and enter the RUNNING COUNT so far (the
 // cumulative total after that combo). Your total for grading is simply the
 // running count of the last combo you declare. Grading runs the engine via POST
 // /tools/score-hand (scoring/hand.Score on the server) — no scoring is
-// reimplemented here. The verdict is rendered in place over the list you built:
-// your total is marked Correct/Wrong against the engine, declarations that don't
-// match an engine combo are crossed out, and combos you missed are appended. This
-// is exactly where teaching belongs — official games carry no in-game coaching.
+// reimplemented here. The verdict grades the CARDS, not just the number: it reads
+// Correct only when every declared combo matches a distinct engine combo, nothing
+// is missed, AND the running total equals the engine's — so the right number with
+// the wrong cards is still Wrong. Teaching feedback is rendered in place over the
+// list either way: declarations that don't match an engine combo are crossed out,
+// and combos you missed are appended; the correct/wrong graphic sits at the bottom.
+// This is exactly where teaching belongs — official games carry no in-game coaching.
 
 import { mountHeader } from './header.js';
 import { cardFace } from './cardFace.js';
@@ -30,16 +33,20 @@ const root = document.getElementById('scoring-quiz');
 mountHeader();
 
 // The combo kinds the user can declare — exactly the simple scoring elements, in
-// the order they're conventionally counted. Run length is entered separately (a
-// small numeric input) rather than split into "Run of 3/4/5" picker entries.
+// the order they're conventionally counted. Runs are split into explicit "Run of
+// 3/4/5" dropdown entries (each maps to engine kind `run` with a fixed run_length)
+// rather than a separate run-length input. Each entry has an `id` (the dropdown
+// value), the engine `kind` it grades against, and a `runLen` (null unless a run).
 // TODO: add guidance for double runs and three/four-of-a-kind; until then those
 // stay out of the picker and the engine's bundled run combos surface as "missed".
 const KINDS = [
-    { id: 'fifteen', label: 'Fifteen' },
-    { id: 'pair', label: 'Pair' },
-    { id: 'run', label: 'Run' },
-    { id: 'flush', label: 'Flush' },
-    { id: 'nobs', label: 'Nobs' },
+    { id: 'fifteen', label: 'Fifteen', kind: 'fifteen', runLen: null },
+    { id: 'pair', label: 'Pair', kind: 'pair', runLen: null },
+    { id: 'run3', label: 'Run of 3', kind: 'run', runLen: 3 },
+    { id: 'run4', label: 'Run of 4', kind: 'run', runLen: 4 },
+    { id: 'run5', label: 'Run of 5', kind: 'run', runLen: 5 },
+    { id: 'flush', label: 'Flush', kind: 'flush', runLen: null },
+    { id: 'nobs', label: 'Nobs', kind: 'nobs', runLen: null },
 ];
 // How each kind is called aloud in the rendered "[cards] <call> for N" line. Runs
 // fold in their length ("run of 3"); everything else is a fixed word.
@@ -66,11 +73,10 @@ const STARTER = 4;
 const state = {
     cards: [],            // five {rank, suit}: [0..3] sorted hand, [4] starter
     selected: new Set(),  // indices into cards currently picked for a declaration
-    kind: 'fifteen',      // the kind for the next declaration
-    runLen: '',           // run length for the next declaration (Run kind only)
-    count: '',            // the running count so far the user claims after this combo
+    kindId: 'fifteen',    // the selected dropdown entry id for the next declaration
+    count: '',            // the running total count the user claims after this combo
     declarations: [],     // [{ kind, idxs:[...], count:int, runLen:int|null }]
-    result: null,         // graded verdict { total, declTotal, declared:[...], missed:[...] }, or null
+    result: null,         // graded verdict { correct, total, declTotal, declared:[...], missed:[...] }, or null
     busy: false,          // a /tools/score-hand request is in flight
     builderError: null,   // inline reason an "Add to score" was rejected, or null
     error: null,          // a friendly request-level error message, or null
@@ -79,8 +85,7 @@ const state = {
 function newDeal() {
     state.cards = dealShow();
     state.selected = new Set();
-    state.kind = 'fifteen';
-    state.runLen = '';
+    state.kindId = 'fifteen';
     state.count = '';
     state.declarations = [];
     state.result = null;
@@ -107,24 +112,15 @@ function addDeclaration() {
         render();
         return;
     }
-    let runLen = null;
-    if (state.kind === 'run') {
-        runLen = parseInt(state.runLen, 10);
-        if (![3, 4, 5].includes(runLen)) {
-            state.builderError = 'Enter the run length (3, 4, or 5).';
-            render();
-            return;
-        }
-    }
+    const entry = KINDS.find((k) => k.id === state.kindId) || KINDS[0];
     const count = parseInt(state.count, 10);
     if (!Number.isFinite(count) || count < 1) {
-        state.builderError = 'Enter the running count so far.';
+        state.builderError = 'Enter the total count.';
         render();
         return;
     }
-    state.declarations.push({ kind: state.kind, idxs: [...state.selected].sort((a, b) => a - b), count, runLen });
+    state.declarations.push({ kind: entry.kind, idxs: [...state.selected].sort((a, b) => a - b), count, runLen: entry.runLen });
     state.selected = new Set();
-    state.runLen = '';
     state.count = '';
     state.builderError = null;
     render();
@@ -222,7 +218,14 @@ function grade(declTotal, rawCombos, engineTotal) {
     const missed = engine.filter((e) => !e.used)
         .map((e) => ({ kind: e.kind, cards: e.cards, points: e.points, runLen: e.runLen }));
 
-    return { total: engineTotal, declTotal, declared, missed };
+    // The verdict grades the CARDS, not just the number: Correct requires every
+    // declaration to match a distinct engine combo (none wrong), no engine combo
+    // left undeclared (none missed), AND the running total to equal the engine's.
+    // This way a hand that happens to sum to the right number with the wrong cards
+    // reads Wrong, not Correct.
+    const correct = declared.every((d) => d.correct) && missed.length === 0 && declTotal === engineTotal;
+
+    return { correct, total: engineTotal, declTotal, declared, missed };
 }
 
 // --- rendering ----------------------------------------------------------------
@@ -250,27 +253,23 @@ function renderShow() {
 function renderControls() {
     const kindSel = h('select', {
         class: 'input sq-kind', 'aria-label': 'Combo type',
-        // Re-render on change so the run-length input appears/disappears with Run.
-        onchange: (e) => { state.kind = e.target.value; render(); },
-    }, ...KINDS.map((k) => h('option', { value: k.id, ...(k.id === state.kind ? { selected: 'selected' } : {}) }, k.label)));
-
-    const runLenInput = state.kind === 'run' ? h('input', {
-        type: 'number', min: '3', max: '5', class: 'input sq-runlen', placeholder: '# cards',
-        'aria-label': 'Number of cards in the run', value: state.runLen,
-        oninput: (e) => { state.runLen = e.target.value; },
-        onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addDeclaration(); } },
-    }) : null;
+        // Runs are explicit "Run of N" entries now, so changing the kind no longer
+        // toggles any other control — just record the selection.
+        onchange: (e) => { state.kindId = e.target.value; },
+    }, ...KINDS.map((k) => h('option', { value: k.id, ...(k.id === state.kindId ? { selected: 'selected' } : {}) }, k.label)));
 
     const countInput = h('input', {
-        type: 'number', min: '1', class: 'input sq-count', placeholder: 'Count so far',
-        'aria-label': 'Running count so far', value: state.count,
+        type: 'number', min: '1', class: 'input sq-count', placeholder: 'total count',
+        'aria-label': 'Total count', value: state.count,
         oninput: (e) => { state.count = e.target.value; },
         onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addDeclaration(); } },
     });
 
     const addBtn = h('button', { class: 'btn', type: 'button', onclick: addDeclaration }, 'Add to score');
 
-    const row = h('div', { class: 'sq-controls' }, kindSel, runLenInput, countInput, addBtn);
+    // Reads as "[kind dropdown] for [total count]" — the literal "for" sits between
+    // the selector and the count input.
+    const row = h('div', { class: 'sq-controls' }, kindSel, h('span', { class: 'sq-for' }, 'for'), countInput, addBtn);
     return state.builderError
         ? h('div', { class: 'sq-builder' }, row, h('span', { class: 'sq-builder-error' }, state.builderError))
         : row;
@@ -323,18 +322,13 @@ function renderDeclared() {
     return h('div', { class: 'sq-decl-list' }, ...rows);
 }
 
+// renderVerdict shows ONLY the correct/wrong graphic (no redundant text line that
+// repeats the score). Correctness is the cards-aware verdict computed in grade().
 function renderVerdict() {
-    const { total, declTotal } = state.result;
-    const correct = declTotal === total;
-    const badge = correct
+    const badge = state.result.correct
         ? h('span', { class: 'pr-badge ok' }, '✓ correct')
         : h('span', { class: 'pr-badge off' }, '✗ wrong');
-    const headline = correct
-        ? `Correct — the hand scores ${total}.`
-        : `Wrong — you counted ${declTotal}, the hand scores ${total}.`;
-    return h('div', { class: 'sq-verdict' },
-        h('span', { class: 'sq-verdict-text' }, headline),
-        badge);
+    return h('div', { class: 'sq-verdict' }, badge);
 }
 
 function renderActions() {
@@ -353,11 +347,12 @@ function renderActions() {
 function render() {
     const board = [renderShow()];
     if (!state.result) board.push(renderControls());
-    if (state.result) board.push(renderVerdict());
     board.push(renderDeclared(), renderActions());
+    // The verdict graphic sits at the bottom, below the declared/feedback list.
+    if (state.result) board.push(renderVerdict());
 
     const kids = [
-        h('h1', { class: 'pr-title' }, 'Scoring quiz'),
+        h('h1', { class: 'pr-title' }, 'Hand Counting Tutorial'),
         h('div', { class: 'panel pr-board' }, ...board),
     ];
     if (state.error) {
