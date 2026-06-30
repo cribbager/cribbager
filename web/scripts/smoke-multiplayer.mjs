@@ -73,6 +73,10 @@ const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 const ui = (abs, seat) => (seat === 0 ? [abs[0], abs[1]] : [abs[1], abs[0]]);
 // inverse: a seat's [me, opp] back into absolute [seat0, seat1].
 const toAbs = (mo, seat) => (seat === 0 ? [mo[0], mo[1]] : [mo[1], mo[0]]);
+// The game-over overlay caps the displayed score at 121 (cribbage ends the instant
+// a player reaches it, even though the engine reports the raw show total), so the
+// rendered number is min(View score, 121) — applied identically by both clients.
+const cap = (arr) => arr.map((v) => Math.min(v, 121));
 
 try {
     // Host and joiner get ISOLATED browser contexts (separate localStorage) — they
@@ -148,11 +152,13 @@ try {
             const agree = eq(hAbs, jAbs);
             console.log('rendered (abs)       : host', hAbs, ' join', jAbs, agree ? '✓ agree' : '✗ DIVERGED');
             if (!agree) scoreOk = false;
-            // (b) Each player's rendered score equals uiScores(View.Scores) for its seat.
+            // (b) Each player's rendered score is a deterministic function of the View:
+            // min(uiScores(View.Scores)[seat], 121) — the display cap applied identically.
             const hView = await viewScores(host, hostCred), jView = await viewScores(joiner, joinCred);
-            const hMatch = eq(hOv, ui(hView, hostCred.seat)), jMatch = eq(jOv, ui(jView, joinCred.seat));
-            console.log('host  rendered/View  :', hOv, 'vs', ui(hView, hostCred.seat), hMatch ? '✓' : '✗');
-            console.log('join  rendered/View  :', jOv, 'vs', ui(jView, joinCred.seat), jMatch ? '✓' : '✗');
+            const hWant = cap(ui(hView, hostCred.seat)), jWant = cap(ui(jView, joinCred.seat));
+            const hMatch = eq(hOv, hWant), jMatch = eq(jOv, jWant);
+            console.log('host  rendered/View  :', hOv, 'vs', hWant, hMatch ? '✓' : '✗');
+            console.log('join  rendered/View  :', jOv, 'vs', jWant, jMatch ? '✓' : '✗');
             if (!hMatch || !jMatch) scoreOk = false;
         } catch (e) {
             console.log('❌ score assertion error:', e.message);

@@ -440,6 +440,13 @@ async function onEvent(e) {
         case 'gameOver': {
             const won = e.winner === HUMAN;
             const skunk = e.skunk === 'double' ? ' — a double skunk!' : e.skunk === 'skunk' ? ' — a skunk!' : '';
+            // Cribbage ends the instant a player reaches 121, so the DISPLAYED score
+            // is capped there even though the engine reports the raw show total (e.g.
+            // a final hand can total the winner past 121). This is a pure display
+            // policy applied identically by both clients (and matching the board peg,
+            // which already clamps at 121), so it introduces no divergence. Skunk
+            // thresholds use the LOSER's score (always < 121), so they're unaffected.
+            const shown = [Math.min(state.score[HUMAN], 121), Math.min(state.score[BOT], 121)];
             // Post-game discard analysis (A8): offered only to a signed-in participant,
             // for whom this finished game is a stored result (a guest's game isn't
             // account-scoped, so the analysis endpoint would 404 — don't show it).
@@ -453,7 +460,7 @@ async function onEvent(e) {
             // vs a human: "Rematch" hosts a fresh game (new shareable link). vs the
             // bot: "New game" starts another immediately. Either way "Menu" returns.
             endOverlay(won ? 'You win!' : `${oppLabel} wins`,
-                `${state.score[HUMAN]} – ${state.score[BOT]}${skunk}`,
+                `${shown[HUMAN]} – ${shown[BOT]}${skunk}`,
                 lastMode === 'mp' ? 'Rematch' : 'New game',
                 lastMode === 'mp' ? () => goNewOpen(lastName) : goNewBot,
                 endLinks);
