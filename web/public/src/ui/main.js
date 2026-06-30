@@ -129,6 +129,25 @@ function awardPoints(player, points) {
     state.score[player] = Math.min(121, state.score[player] + points);
     board.score(boardTrack(player), points);
 }
+// Reconcile the locally-accumulated score with the server's authoritative scores
+// from a snapshot. The board score is built by summing per-delta point increments
+// (awardPoints); if a delta is ever delivered a different number of times to the
+// two players (a transient SSE drop/dup/reconnect edge), their boards would drift
+// apart permanently — "the score is different for each player". Call this ONLY when
+// the client is fully caught up to the snapshot (appliedSeq === snap.Version), so
+// the server scores reflect exactly the deltas we've applied: any difference is
+// drift to be corrected, never a not-yet-applied event. Snaps the peg front to the
+// truth (keeping a valid leapfrog pair) so the fix is self-healing every turn.
+function reconcileScores(snap) {
+    const want = uiScores(snap.Scores);
+    for (const p of [HUMAN, BOT]) {
+        if (state.score[p] === want[p])
+            continue;
+        state.score[p] = want[p];
+        const peg = board.getState().pegs[boardTrack(p)];
+        board.setPegs(boardTrack(p), { front: want[p], back: Math.min(peg.back, want[p]) });
+    }
+}
 // ---------- cards ----------
 function makeInteractive(el, onClick, label) {
     el.setAttribute('role', 'button');
@@ -667,6 +686,9 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
         try { snap = await client.snapshot(gameId, token); }
         catch { return false; }
         if (gameOver) return false; // may have flipped (game_won / opponent-left) during the await
+        // Once we're fully caught up the server scores reflect exactly the deltas we've
+        // applied, so reconcile away any drift (incl. before the final/winner snapshot).
+        if (appliedSeq >= snap.Version) reconcileScores(snap);
         if (snap.Winner != null) return false;
         // Don't prompt until the animation has caught up to the snapshot — otherwise
         // we'd render the decision (e.g. the discard) before the deal/plays that led
