@@ -615,7 +615,7 @@ button:active { transform: translateY(1px); }
    vars (cascades to the .card children; tweak --card-scale to resize). */
 .sq-combo-cards {
   display: inline-flex; gap: var(--space-1); flex-wrap: wrap;
-  --card-scale: 0.6;
+  --card-scale: 0.75;
   --card-w: calc(70px * var(--card-scale));
   --card-h: calc(98px * var(--card-scale));
   --card-rank-size: calc(18px * var(--card-scale));
