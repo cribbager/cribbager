@@ -589,7 +589,7 @@ button:active { transform: translateY(1px); }
    the show layout, the single control row, and the inline combo list are new. */
 #scoring-quiz { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4); }
 
-.sq-show { display: flex; gap: var(--space-3); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.sq-show { display: flex; gap: var(--space-3); flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; }
 .sq-card-slot { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
 /* The starter (cut) card is set apart with extra space and a label beneath it —
    no highlight ring. */
@@ -597,18 +597,19 @@ button:active { transform: translateY(1px); }
 .sq-starter-tag { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px;
   font-weight: 700; color: var(--color-ink-muted); }
 
-/* Single control row: the kind selector, the points input, and the Add button
-   all sit on one line at the same height. */
+/* Single control row: the kind selector, the run-length input (Run only), the
+   running-count input, and the Add button all sit on one line at the same
+   height. */
 .sq-builder { display: flex; flex-direction: column; gap: var(--space-2); }
 .sq-controls { display: flex; gap: var(--space-2); align-items: stretch; flex-wrap: wrap; }
 .sq-controls > .input, .sq-controls > .btn { height: 42px; box-sizing: border-box; margin: 0; }
 .sq-controls .sq-kind { width: auto; flex: 0 0 auto; }
-.sq-controls .sq-points { width: 110px; flex: 0 0 auto; }
+.sq-controls .sq-runlen { width: 90px; flex: 0 0 auto; }
+.sq-controls .sq-count { width: 130px; flex: 0 0 auto; }
 .sq-builder-error { color: var(--color-danger-ink); font-weight: 600; font-size: var(--text-sm); }
 
 /* Inline declared/combo list — no panel, no heading. */
 .sq-decl-list { display: flex; flex-direction: column; gap: var(--space-2); }
-.sq-empty { color: var(--color-ink-muted); margin: 0; }
 .sq-combo { display: flex; align-items: center; gap: var(--space-2); }
 .sq-combo-cards { display: inline-flex; gap: var(--space-1); flex-wrap: wrap; }
 .sq-combo-call { font-weight: 700; }
@@ -622,11 +623,11 @@ button:active { transform: translateY(1px); }
   font-size: var(--text-md); line-height: 1; padding: 0 var(--space-1); margin-left: auto; }
 .sq-decl-remove:hover { color: var(--color-danger-ink); }
 
-/* Overall verdict line (Correct/Wrong for the user's total) and the action row
-   (total input next to Submit count). */
+/* Overall verdict line (Correct/Wrong for the user's running count) and the
+   action row (the Submit button — the total is the last combo's running count, so
+   there's no separate total box). */
 .sq-verdict { display: flex; align-items: center; gap: var(--space-3); }
 .sq-verdict-text { font-size: var(--text-lg); font-weight: 800; }
 .sq-verdict .pr-badge { margin-left: auto; }
 .sq-actions { display: flex; align-items: stretch; justify-content: flex-end; gap: var(--space-2); }
 .sq-actions > .input, .sq-actions > .btn { height: 42px; box-sizing: border-box; margin: 0; }
-.sq-actions .sq-total-input { width: 110px; flex: 0 0 auto; }
