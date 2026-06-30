@@ -5,6 +5,7 @@ import (
 
 	"github.com/cribbager/cribbager/internal/bot/eval"
 	"github.com/cribbager/cribbager/internal/cribbage"
+	"github.com/cribbager/cribbager/internal/scoring/hand"
 )
 
 // Stateless learning tools. Unlike a live game, these endpoints hold no state and
@@ -77,4 +78,84 @@ func (s *Server) handleDiscardEval(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, discardEvalResponse{Hand: req.Hand, Dealer: req.Dealer, Holds: holds})
+}
+
+// scoreHandRequest is the body of POST /tools/score-hand: the four cards held at
+// the show plus the starter (cut) card, and whether this is a crib — which only
+// changes the flush rule (a crib flushes solely when all five cards match suit).
+type scoreHandRequest struct {
+	Hand    []cribbage.Card `json:"hand"`    // exactly 4 cards
+	Starter cribbage.Card   `json:"starter"` // the cut card
+	Crib    bool            `json:"crib"`    // score as a crib (stricter flush)
+}
+
+// scoredCombo is one scoring element on the wire, mirroring hand.Combo. RunLength
+// and Multiplicity are populated only for runs (a "double run" is one combo whose
+// points already absorb the pair it creates), so they are omitted otherwise.
+type scoredCombo struct {
+	Kind         string          `json:"kind"`  // fifteen | pair | run | flush | nobs
+	Cards        []cribbage.Card `json:"cards"` // the cards forming this combo
+	Points       int             `json:"points"`
+	RunLength    int             `json:"run_length,omitempty"`
+	Multiplicity int             `json:"multiplicity,omitempty"`
+}
+
+// scoreHandResponse echoes the validated input and returns the authoritative
+// total with its itemized, teachable breakdown — the engine's hand.Score, the
+// single source of truth, with no scoring duplicated here.
+type scoreHandResponse struct {
+	Hand    []cribbage.Card `json:"hand"`
+	Starter cribbage.Card   `json:"starter"`
+	Crib    bool            `json:"crib"`
+	Total   int             `json:"total"`
+	Combos  []scoredCombo   `json:"combos"`
+}
+
+// handleScoreHand scores a cribbage show: four hand cards plus a starter, graded
+// by hand.Score (the engine's own scorer — no rules duplicated here). It is
+// stateless and unauthenticated: the caller supplies the whole hand, nothing is
+// read or written. Path: POST /tools/score-hand.
+func (s *Server) handleScoreHand(w http.ResponseWriter, r *http.Request) {
+	var req scoreHandRequest
+	if !decodeJSON(w, r, &req) {
+		return // decodeJSON already wrote a 400 (bad JSON or malformed card)
+	}
+	if len(req.Hand) != 4 {
+		writeErr(w, http.StatusBadRequest, "hand must contain exactly 4 cards")
+		return
+	}
+	// A missing or out-of-range starter decodes to the zero Card (rank 0), which
+	// the scorer would otherwise treat as a real card; reject it explicitly.
+	if !req.Starter.Rank.Valid() || !req.Starter.Suit.Valid() {
+		writeErr(w, http.StatusBadRequest, "starter must be a valid card")
+		return
+	}
+
+	var hc [4]cribbage.Card
+	copy(hc[:], req.Hand)
+	res, err := hand.Score(hc, req.Starter, req.Crib)
+	if err != nil {
+		// The only error hand.Score returns is a duplicate card across the five.
+		writeErr(w, http.StatusBadRequest, "hand and starter must be five distinct cards")
+		return
+	}
+
+	flat := res.Combos()
+	combos := make([]scoredCombo, len(flat))
+	for i, c := range flat {
+		combos[i] = scoredCombo{
+			Kind:         c.Kind.String(),
+			Cards:        c.Cards,
+			Points:       c.Points,
+			RunLength:    c.RunLength,
+			Multiplicity: c.Multiplicity,
+		}
+	}
+	writeJSON(w, http.StatusOK, scoreHandResponse{
+		Hand:    req.Hand,
+		Starter: req.Starter,
+		Crib:    req.Crib,
+		Total:   res.Total,
+		Combos:  combos,
+	})
 }
