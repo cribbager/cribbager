@@ -144,6 +144,7 @@ export function mountHeader({ onAuthChange } = {}) {
     // dedicated learning surface, where analysis/teaching belongs.
     const nav = h('nav', { class: 'site-nav', 'aria-label': 'Tools' },
         h('a', { class: 'site-nav-link', href: '/practice.html' }, 'Practice'),
+        h('a', { class: 'site-nav-link', href: '/practice-scoring.html' }, 'Scoring quiz'),
     );
     const inner = h('div', { class: 'site-header-inner' },
         h('a', { class: 'site-wordmark', href: '/' }, 'Cribbager'),

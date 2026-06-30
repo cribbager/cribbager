@@ -583,3 +583,38 @@ button:active { transform: translateY(1px); }
 
 .pr-message { text-align: center; max-width: 480px; margin: var(--space-4) auto 0; }
 .pr-message-body { color: var(--color-ink-muted); margin: 0 0 var(--space-3); }
+
+/* === Scoring quiz (A6) — a standalone hand-counting practice page =========== */
+/* Reuses the discard trainer's pr- vocabulary (title/subtitle/board/hint/badge/
+   verdict/chip); only the show layout, scoring area, and builder are new. */
+#scoring-quiz { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4); }
+
+.sq-show { display: flex; gap: var(--space-3); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.sq-card-slot { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+/* The starter (cut) card is set apart with a gold ring + a label beneath it. */
+.card.sq-starter { outline: 2px solid var(--color-gold); outline-offset: 2px; }
+.sq-starter-tag { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700; color: var(--color-gold); }
+
+.sq-builder { display: flex; flex-direction: column; gap: var(--space-2); }
+.sq-builder-row { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+.sq-kind { flex: 0 0 auto; }
+.sq-points { width: 96px; }
+
+.sq-scoring { display: flex; flex-direction: column; gap: var(--space-2);
+  border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); background: var(--color-felt); }
+.sq-scoring-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.sq-scoring-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700; color: var(--color-ink-muted); }
+.sq-total { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--color-ink); }
+
+.sq-decl-list { display: flex; flex-direction: column; gap: var(--space-1); }
+.sq-decl { display: flex; align-items: center; gap: var(--space-2); }
+.sq-decl-kind { font-weight: 700; min-width: 72px; }
+.sq-decl-cards { display: inline-flex; flex-wrap: wrap; }
+.sq-decl-pts { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+.sq-decl-remove { background: none; border: 0; cursor: pointer; color: var(--color-ink-muted);
+  font-size: var(--text-md); line-height: 1; padding: 0 var(--space-1); }
+.sq-decl-remove:hover { color: var(--color-danger-ink); }
+
+.sq-breakdown { display: flex; flex-direction: column; gap: var(--space-1); }
