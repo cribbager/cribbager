@@ -217,11 +217,19 @@ function grade(declTotal, rawCombos, engineTotal) {
             match = engine.find((e) => !e.used && e.kind === d.kind && cardKey(e.cards) === key);
         }
         if (match) match.used = true;
-        return { kind: d.kind, cards, count: d.count, runLen: d.runLen, correct: !!match };
+        return { kind: d.kind, cards, count: d.count, runLen: d.runLen, correct: !!match, points: match ? match.points : 0 };
     });
 
     const missed = engine.filter((e) => !e.used)
         .map((e) => ({ kind: e.kind, cards: e.cards, points: e.points, runLen: e.runLen }));
+
+    // Corrected running count: the cumulative of the REAL points, skipping wrong
+    // declarations. Each correct/missed combo gets the count it SHOULD show there,
+    // so a valid combo no longer carries a running total inflated by a wrong one
+    // above it (and the progression ends at the engine total).
+    let run = 0;
+    for (const d of declared) { if (d.correct) { run += d.points; d.correctCount = run; } }
+    for (const m of missed) { run += m.points; m.correctCount = run; }
 
     // The verdict grades the CARDS, not just the number: Correct requires every
     // declaration to match a distinct engine combo (none wrong), no engine combo
@@ -311,10 +319,13 @@ function renderDeclared() {
 
     if (state.result) {
         for (const d of state.result.declared) {
-            rows.push(comboLine(d.cards, d.kind, d.count, { wrong: !d.correct, runLen: d.runLen }));
+            // Correct combos show the corrected running count (what it should be
+            // there); wrong ones show what the user entered, struck through.
+            const forN = d.correct ? d.correctCount : d.count;
+            rows.push(comboLine(d.cards, d.kind, forN, { wrong: !d.correct, runLen: d.runLen }));
         }
         for (const m of state.result.missed) {
-            rows.push(comboLine(m.cards, m.kind, m.points, { missed: true, runLen: m.runLen }));
+            rows.push(comboLine(m.cards, m.kind, m.correctCount, { missed: true, runLen: m.runLen }));
         }
     } else {
         state.declarations.forEach((d, i) => {
