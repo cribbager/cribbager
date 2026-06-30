@@ -129,24 +129,48 @@ function awardPoints(player, points) {
     state.score[player] = Math.min(121, state.score[player] + points);
     board.score(boardTrack(player), points);
 }
-// Reconcile the locally-accumulated score with the server's authoritative scores
-// from a snapshot. The board score is built by summing per-delta point increments
-// (awardPoints); if a delta is ever delivered a different number of times to the
-// two players (a transient SSE drop/dup/reconnect edge), their boards would drift
-// apart permanently — "the score is different for each player". Call this ONLY when
-// the client is fully caught up to the snapshot (appliedSeq === snap.Version), so
-// the server scores reflect exactly the deltas we've applied: any difference is
-// drift to be corrected, never a not-yet-applied event. Snaps the peg front to the
-// truth (keeping a valid leapfrog pair) so the fix is self-healing every turn.
-function reconcileScores(snap) {
-    const want = uiScores(snap.Scores);
-    for (const p of [HUMAN, BOT]) {
-        if (state.score[p] === want[p])
-            continue;
-        state.score[p] = want[p];
-        const peg = board.getState().pegs[boardTrack(p)];
-        board.setPegs(boardTrack(p), { front: want[p], back: Math.min(peg.back, want[p]) });
+// renderFromView is the correctness keystone: a SOFT projection of the server's
+// authoritative per-seat View onto the board. The event reducer (translate/onEvent/
+// awardPoints) still produces the *animation*, but it builds the score and other
+// state by ACCUMULATING per-delta increments seeded at 0 — so if a delta is ever
+// delivered a different number of times to the two players (a transient SSE
+// drop/dup/reconnect edge), their boards drift apart permanently ("the score is
+// different for each player"). renderFromView overwrites every authoritative field
+// from the snapshot, so each is self-healing at every caught-up point.
+//
+// Call this ONLY when the client is fully caught up to the snapshot
+// (appliedSeq >= snap.Version), so the View reflects exactly the deltas we have
+// applied: any difference is drift to be corrected, never a not-yet-applied event.
+//
+// It overwrites the authoritative fields and PRESERVES the transient ones (show,
+// discarding, selected, speech, cut) so it never wipes mid-animation narration or a
+// mid-selection. While a human decision is pending (discard/play prompt) it also
+// leaves the hand/legal/selection alone, so it can't clobber the cards the user is
+// actively choosing — belt-and-braces atop the single-flighted pump.
+function renderFromView(snap) {
+    const pending = resolveDiscard || resolvePlay;
+    state.dealer = snap.Dealer == null ? null : uiSeat(snap.Dealer);
+    state.cribOwner = state.dealer;
+    state.score = uiScores(snap.Scores);
+    state.botHandCount = snap.OpponentCards;
+    state.played = [CS(snap.YourPlayed), CS(snap.OpponentPlayed)]; // [me, opponent]
+    state.count = snap.Count;
+    state.starter = snap.Phase !== 'discard' && snap.Starter ? C(snap.Starter) : null;
+    state.cribCount = snap.CribCards;
+    state.inPlay = snap.Phase === 'play';
+    if (!pending) {
+        // Only safe to re-seat the hand/legal when the user isn't mid-decision.
+        state.humanHand = CS(snap.YourHand);
+        state.legal = (snap.Phase === 'play' && snap.ToPlay === MY_SEAT) ? CS(snap.LegalPlays) : null;
     }
+    // Snap the peg front to the truth, keeping a valid leapfrog pair (back never
+    // ahead of front), so the board display matches the View exactly.
+    for (const p of [HUMAN, BOT]) {
+        const peg = board.getState().pegs[boardTrack(p)];
+        if (peg.front !== state.score[p])
+            board.setPegs(boardTrack(p), { front: state.score[p], back: Math.min(peg.back, state.score[p]) });
+    }
+    render();
 }
 // ---------- cards ----------
 function makeInteractive(el, onClick, label) {
@@ -686,9 +710,10 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
         try { snap = await client.snapshot(gameId, token); }
         catch { return false; }
         if (gameOver) return false; // may have flipped (game_won / opponent-left) during the await
-        // Once we're fully caught up the server scores reflect exactly the deltas we've
-        // applied, so reconcile away any drift (incl. before the final/winner snapshot).
-        if (appliedSeq >= snap.Version) reconcileScores(snap);
+        // Once we're fully caught up the View reflects exactly the deltas we've applied,
+        // so project ALL authoritative state from it — healing any drift every action
+        // (incl. before the final/winner snapshot), not just the score.
+        if (appliedSeq >= snap.Version) renderFromView(snap);
         if (snap.Winner != null) return false;
         // Don't prompt until the animation has caught up to the snapshot — otherwise
         // we'd render the decision (e.g. the discard) before the deal/plays that led
@@ -721,7 +746,16 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
                     const d = queue.shift();
                     if (d.seq <= appliedSeq) continue; // each game event applied once
                     appliedSeq = d.seq;
-                    if (d.type === 'game_won') { gameOver = true; clearGame(gameId); }
+                    if (d.type === 'game_won') {
+                        gameOver = true;
+                        clearGame(gameId);
+                        // Source the final score (and skunk calc) from the authoritative
+                        // View, not the accumulated state, so the game-over number is
+                        // drift-proof — the last user-visible number off accumulation.
+                        // onEvent('gameOver') below reads the now-reconciled state.score.
+                        try { renderFromView(await client.snapshot(gameId, token)); }
+                        catch { /* fall back to the accumulated score */ }
+                    }
                     for (const ev of translate(d, ctx)) await onEvent(ev);
                 }
                 const acted = await maybePrompt();
@@ -899,4 +933,17 @@ function boot() {
     }
     goHome(); // nothing actionable on the game page → homepage
 }
-boot();
+
+// The dev render-test page (dev/render-test.html) sets this flag before importing
+// this module so it can drive the EXACT render path (renderFromView → render) with
+// arbitrary Views, without booting a live game (which would navigate away). Only
+// the render harness is exposed; the game loop is untouched.
+if (typeof window !== 'undefined' && window.__CRIBBAGER_NO_BOOT__) {
+    window.__cribbagerRenderTest = {
+        renderFromView,
+        reset: () => { state = fresh(); board.reset(); render(); },
+        setSeat: (s) => { MY_SEAT = s; },
+    };
+} else {
+    boot();
+}
