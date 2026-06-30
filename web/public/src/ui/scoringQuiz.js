@@ -322,16 +322,20 @@ function renderDeclared() {
     return h('div', { class: 'sq-decl-list' }, ...rows);
 }
 
+// renderVerdict shows ONLY the correct/incorrect graphic (no redundant text line
+// that repeats the score). It occupies the same slot the scoring form did — so
+// submitting swaps form → verdict in place with no layout jump. Correctness is the
+// cards-aware verdict computed in grade().
+function renderVerdict() {
+    const badge = state.result.correct
+        ? h('span', { class: 'pr-badge ok' }, '✓ Correct')
+        : h('span', { class: 'pr-badge off' }, 'Not quite');
+    return h('div', { class: 'sq-verdict' }, badge);
+}
+
 function renderActions() {
     if (state.result) {
-        // The correct/wrong graphic sits flush left on the same row as the New Hand
-        // button (no redundant text line that repeats the score). Correctness is the
-        // cards-aware verdict computed in grade().
-        const badge = state.result.correct
-            ? h('span', { class: 'pr-badge ok' }, '✓ correct')
-            : h('span', { class: 'pr-badge off' }, '✗ wrong');
-        return h('div', { class: 'sq-actions sq-result-bar' },
-            badge,
+        return h('div', { class: 'sq-actions' },
             h('button', { class: 'btn btn-primary', type: 'button', onclick: newDeal }, 'New Hand'));
     }
     const submitBtn = h('button', {
@@ -343,8 +347,10 @@ function renderActions() {
 }
 
 function render() {
+    // The scoring form and the verdict share one slot (right under the cards), so
+    // submitting swaps the form out for the verdict in place — no layout jump.
     const board = [renderShow()];
-    if (!state.result) board.push(renderControls());
+    board.push(state.result ? renderVerdict() : renderControls());
     board.push(renderDeclared(), renderActions());
 
     const kids = [

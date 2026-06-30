@@ -625,9 +625,10 @@ button:active { transform: translateY(1px); }
 
 /* Overall verdict graphic (the cards-aware Correct/Wrong pill), shown alone at the
    bottom of the page below the declared/feedback list — no redundant text line.
-   The action row holds the Submit button, or after grading the verdict + New Hand. */
+   The action row holds the Submit button, or after grading the New Hand button. */
 .sq-actions { display: flex; align-items: stretch; justify-content: flex-end; gap: var(--space-2); }
-/* After grading: correct/wrong graphic flush left, New Hand button on the same row. */
-.sq-result-bar { align-items: center; justify-content: space-between; }
-.sq-result-bar .pr-badge { margin-left: 0; font-size: var(--text-md); }
+/* The verdict occupies the scoring form's slot (same min-height) so submit doesn't
+   jump; the graphic is flush left. */
+.sq-verdict { display: flex; align-items: center; justify-content: flex-start; min-height: 42px; }
+.sq-verdict .pr-badge { margin-left: 0; font-size: var(--text-md); }
 .sq-actions > .input, .sq-actions > .btn { height: 42px; box-sizing: border-box; margin: 0; }
