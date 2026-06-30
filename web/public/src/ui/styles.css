@@ -639,9 +639,8 @@ button:active { transform: translateY(1px); }
 .sq-status.ok { color: var(--color-success); background: var(--color-success-bg); border: 1px solid var(--color-success-border); }
 .sq-status.bad { color: var(--color-danger-ink); background: var(--color-danger-bg); border: 1px solid var(--color-danger-border); }
 
-/* Bottom row: the scoring form (or, once graded, the verdict graphic) grows on the
-   left; the Submit Score / New Hand button stays on the right. */
-.sq-footer { display: flex; align-items: flex-start; gap: var(--space-2); flex-wrap: wrap; }
-.sq-footer > .sq-controls, .sq-footer > .sq-builder { flex: 1 1 auto; }
-.sq-footer > .btn { flex: 0 0 auto; }
-.sq-footer .input, .sq-footer .btn, .sq-footer select { height: 42px; box-sizing: border-box; margin: 0; }
+/* Bottom row: Submit Score on the left before grading; after grading the overall
+   Correct / Not-quite graphic replaces it on the left, with New Hand on the right. */
+.sq-bottom { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-2); }
+.sq-bottom .btn { height: 42px; box-sizing: border-box; margin: 0; }
+.sq-bottom .pr-badge { margin-left: 0; font-size: var(--text-md); }
