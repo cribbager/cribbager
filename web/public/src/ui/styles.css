@@ -633,6 +633,7 @@ button:active { transform: translateY(1px); }
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto;
   font-size: var(--text-sm); font-weight: 800; line-height: 1; padding: 0;
+  margin-right: var(--space-1);
 }
 .sq-decl-remove { background: none; border: 1px solid var(--color-ink-muted); color: var(--color-ink-muted); cursor: pointer; }
 .sq-decl-remove:hover { color: var(--color-danger-ink); border-color: var(--color-danger-border); }
