@@ -25,8 +25,12 @@ import { cardCode, sortCards } from '../engine/cards.js';
 // UI module owns state + rendering and passes resolved declarations into grade().
 import {
     KINDS, kindById, callPhrase, atomPhrase,
-    atomsFromEngineCombo, grade,
+    grade,
 } from './scoringQuizGrading.js';
+// The `[cards] <phrase> for N` combo-line renderer and the count-aloud line
+// builder are shared with the live game's "Explain the score" overlay so the two
+// stay visually identical (comboBreakdown.js).
+import { comboLine, buildBreakdownLines, breakdownList } from './comboBreakdown.js';
 
 // tiny DOM helper (matches the on*-listener + text-node style used elsewhere)
 function h(tag, attrs = {}, ...kids) {
@@ -230,18 +234,8 @@ function resolvedDeclarations() {
     }));
 }
 
-// buildAnswer turns the engine's combos into the Show-me breakdown: every combo
-// decomposed to atoms, ordered the way you'd count aloud (fifteens, pairs, runs,
-// flush, nobs), each carrying the running count up to it (ending at the total).
-function buildAnswer(rawCombos, total) {
-    const atoms = [];
-    for (const c of rawCombos) atoms.push(...atomsFromEngineCombo(c));
-    const order = { fifteen: 0, pair: 1, run: 2, flush: 3, nobs: 4 };
-    atoms.sort((a, b) => (order[a.kind] - order[b.kind]) || ((a.runLen || 0) - (b.runLen || 0)));
-    let run = 0;
-    const lines = atoms.map((a) => { run += a.points; return { cards: a.cards, phrase: atomPhrase(a), count: run }; });
-    return { lines, total };
-}
+// The Show-me breakdown (buildBreakdownLines) is shared with the live game's
+// "Explain the score" overlay, imported from comboBreakdown.js.
 
 // loadAnswer fetches the engine score for the current hand and stores the Show-me
 // breakdown. Reuses the same /tools/score-hand endpoint and error handling as submit.
@@ -282,7 +276,7 @@ async function loadAnswer() {
     }
 
     state.busy = false;
-    state.answer = buildAnswer(data.combos || [], data.total || 0);
+    state.answer = buildBreakdownLines(data.combos || [], data.total || 0);
     render();
 }
 
@@ -338,44 +332,9 @@ function renderControls() {
         : row;
 }
 
-// comboLine renders one combo as real card faces followed by how it's called and
-// the trailing number: "[faces] run of 3 for 7". `phrase` is the already-resolved
-// call ("double run of 3", "fifteen", …). For a declaration the number is the
-// running count after it; for a missed engine atom it's the atom's own points.
-// opts.wrong crosses it out; opts.missed marks it as one the user didn't declare.
-// opts.correctNumber, when set, appends the running count the line SHOULD read
-// (not struck) — used to teach when the cards are right but the entered count is wrong.
-function comboLine(cards, phrase, forNumber, opts = {}) {
-    const cls = 'sq-combo'
-        + (opts.wrong ? ' is-wrong' : '')
-        + (opts.missed ? ' is-missed' : '');
-    const kids = [];
-    // Leading chip, flush left: before grading it's the remove (✕) button; after
-    // grading it's a green circled check (correct) or red circled ✕ (wrong/missed).
-    // Show-me lines are `plain` — the breakdown is the answer, so no chip.
-    if (!opts.plain) {
-        if (opts.onRemove) {
-            kids.push(h('button', {
-                class: 'sq-decl-remove', type: 'button', 'aria-label': 'Remove this combo',
-                onclick: opts.onRemove,
-            }, '✕'));
-        } else if (opts.status === 'correct') {
-            kids.push(h('span', { class: 'sq-status ok', 'aria-label': 'correct' }, '✓'));
-        } else {
-            kids.push(h('span', { class: 'sq-status bad', 'aria-label': opts.status === 'missed' ? 'missed' : 'wrong' }, '✕'));
-        }
-    }
-    kids.push(
-        h('span', { class: 'sq-combo-cards' }, ...sortCards(cards).map((c) => cardFace(c, { small: true }))),
-        h('span', { class: 'sq-combo-call' }, `${phrase} for ${forNumber}`),
-    );
-    // Right cards, wrong running count: show the count it should have read, not
-    // struck through, so the line still teaches the correct progression.
-    if (opts.correctNumber != null) {
-        kids.push(h('span', { class: 'sq-combo-fix' }, `should be ${opts.correctNumber}`));
-    }
-    return h('div', { class: cls }, ...kids);
-}
+// comboLine (the `[cards] <phrase> for N` row) is imported from
+// comboBreakdown.js so this tutorial and the live "Explain the score" overlay
+// render identically.
 
 // renderModeToggle is the Practice / Show-me segmented control above the deck.
 function renderModeToggle() {
@@ -391,12 +350,7 @@ function renderModeToggle() {
 function renderAnswer() {
     if (state.busy) return h('div', { class: 'sq-answer-loading' }, 'Scoring…');
     if (!state.answer) return null;
-    if (!state.answer.lines.length) {
-        return h('div', { class: 'sq-decl-list' },
-            h('div', { class: 'sq-combo' }, h('span', { class: 'sq-combo-call' }, 'No points in this hand')));
-    }
-    const rows = state.answer.lines.map((l) => comboLine(l.cards, l.phrase, l.count, { plain: true }));
-    return h('div', { class: 'sq-decl-list' }, ...rows);
+    return breakdownList(state.answer.lines);
 }
 
 // renderDeclared lists the combos inline (no panel, no heading). Before grading

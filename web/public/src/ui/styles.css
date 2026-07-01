@@ -237,9 +237,19 @@ html, body {
 .show-score { margin-left: 16px; font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; }
 /* matches a card row's reserved height so the seat box never changes height */
 .show-breakdown { display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 6px 16px; min-height: 104px; padding-top: 6px; }
+/* .bd-item / .bd-empty are still used by the finished-game replay view (replay.js). */
 .bd-item { font-size: 14px; font-weight: 600; color: var(--color-ink-soft); cursor: default; }
 .bd-item:hover { color: var(--accent); }
 .bd-empty { color: var(--muted); font-style: italic; }
+/* AM1: the live show now reads "You scored N" + an "Explain the score" link; the
+   per-combo detail opens in a modal (reusing the tutorial's .sq-combo rows). */
+.show-total { font-size: 16px; font-weight: 700; align-self: center; }
+.explain-btn { background: none; border: 0; padding: 0; cursor: pointer; align-self: center;
+  font: inherit; font-weight: 700; color: var(--accent); text-decoration: underline; }
+.explain-btn:hover { color: var(--color-ink); }
+.explain-modal { text-align: left; max-width: 460px; }
+.explain-modal h2 { text-align: center; }
+.explain-body { margin: 6px 0 18px; min-width: 280px; }
 .crib-tag { background: var(--color-surface-tag); border: 1px dashed var(--color-border-dashed); border-radius: 7px; padding: 4px 9px;
   font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); align-self: center; margin-right: 6px; }
 
