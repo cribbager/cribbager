@@ -565,7 +565,7 @@ function renderAnswer() {
     if (!state.answer) return null;
     if (!state.answer.lines.length) {
         return h('div', { class: 'sq-decl-list' },
-            h('div', { class: 'sq-combo' }, h('span', { class: 'sq-combo-call' }, 'No points in this hand — a nineteen.')));
+            h('div', { class: 'sq-combo' }, h('span', { class: 'sq-combo-call' }, 'No points in this hand')));
     }
     const rows = state.answer.lines.map((l) => comboLine(l.cards, l.phrase, l.count, { plain: true }));
     return h('div', { class: 'sq-decl-list' }, ...rows);
