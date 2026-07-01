@@ -146,13 +146,39 @@ html, body {
   letter-spacing: 0.2px; color: var(--color-ink); text-decoration: none;
 }
 .site-wordmark:hover { color: var(--color-accent); }
-/* Tools nav (Practice, …) — shown to everyone, between the wordmark and auth. */
+/* Main nav (Play, Learn) — shown to everyone, between the wordmark and auth.
+   Each is a top-level link with a hover/focus dropdown of specific options. */
 .site-nav { display: flex; align-items: center; gap: var(--space-4); }
 .site-nav-link {
   font-weight: 700; font-size: var(--text-sm); color: var(--color-ink-muted);
   text-decoration: none; padding: var(--space-1) 0;
 }
 .site-nav-link:hover { color: var(--color-accent); }
+/* Dropdown menu: the top label navigates; hovering or focusing within reveals the
+   dropdown (no JS state — CSS :hover / :focus-within). The dropdown sits flush
+   under the label (no gap) so the pointer can travel into it without closing. */
+.site-nav-menu { position: relative; }
+.site-nav-top {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-weight: 700; font-size: var(--text-sm); color: var(--color-ink-muted);
+  text-decoration: none; padding: var(--space-1) 0; cursor: pointer;
+}
+.site-nav-top:hover { color: var(--color-accent); }
+.site-nav-caret { font-size: 9px; opacity: 0.8; }
+.site-nav-dropdown {
+  position: absolute; left: 0; top: 100%; z-index: 60; min-width: 210px;
+  display: none; padding: var(--space-1);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius); box-shadow: var(--shadow-modal);
+}
+.site-nav-menu:hover .site-nav-dropdown,
+.site-nav-menu:focus-within .site-nav-dropdown { display: block; }
+.site-nav-drop-item {
+  display: block; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+  font-size: var(--text-sm); font-weight: 600; color: var(--color-ink);
+  text-decoration: none; white-space: nowrap;
+}
+.site-nav-drop-item:hover { background: var(--color-felt); color: var(--color-accent); }
 
 .site-header-right { display: flex; align-items: center; gap: var(--space-2); }
 /* Compact the header buttons a touch relative to the page .btn default. */

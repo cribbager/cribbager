@@ -140,12 +140,29 @@ export function mountHeader({ onAuthChange } = {}) {
     const notify = () => { if (onAuthChange) onAuthChange(currentUser); };
 
     const right = h('div', { class: 'site-header-right' });
-    // Tools nav, available to everyone (no auth): the discard trainer is a
-    // dedicated learning surface, where analysis/teaching belongs.
-    const nav = h('nav', { class: 'site-nav', 'aria-label': 'Tools' },
-        h('a', { class: 'site-nav-link', href: '/learn.html' }, 'How to play'),
-        h('a', { class: 'site-nav-link', href: '/practice.html' }, 'Practice'),
-        h('a', { class: 'site-nav-link', href: '/practice-scoring.html' }, 'Hand Counting'),
+    // Main nav, available to everyone (no auth): two menus, Play and Learn. The
+    // top label is a real link (Play → home, Learn → How to Play) so it works on
+    // touch, and hovering/focusing reveals the dropdown of specific options
+    // (CSS-driven — see .site-nav-menu). Play mirrors the home page's three start
+    // options; Learn gathers the learning surfaces.
+    const navMenu = (label, topHref, items) => {
+        const top = h('a', { class: 'site-nav-top', href: topHref },
+            label, h('span', { class: 'site-nav-caret', 'aria-hidden': 'true' }, '▾'));
+        const dropdown = h('div', { class: 'site-nav-dropdown', role: 'menu' },
+            ...items.map((it) => h('a', { class: 'site-nav-drop-item', role: 'menuitem', href: it.href }, it.label)));
+        return h('div', { class: 'site-nav-menu' }, top, dropdown);
+    };
+    const nav = h('nav', { class: 'site-nav', 'aria-label': 'Main' },
+        navMenu('Play', '/', [
+            { label: 'Create a new game', href: '/game.html?new=open&public=1' },
+            { label: 'Challenge a friend', href: '/game.html?new=open' },
+            { label: 'Play against the computer', href: '/game.html?new=bot' },
+        ]),
+        navMenu('Learn', '/learn.html', [
+            { label: 'How to Play', href: '/learn.html' },
+            { label: 'Discard Practice', href: '/practice.html' },
+            { label: 'Hand Counting', href: '/practice-scoring.html' },
+        ]),
     );
     const inner = h('div', { class: 'site-header-inner' },
         h('a', { class: 'site-wordmark', href: '/' }, 'Cribbager'),
