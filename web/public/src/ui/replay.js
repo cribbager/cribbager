@@ -16,7 +16,7 @@ import { createBoard, straightBoard } from '../board/board.js';
 import { cardFace } from './cardFace.js';
 import { mountHeader } from './header.js';
 import { buildFrames, handStarts, verdictsByHand } from './replayFrames.js';
-import { parseCard, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
+import { parseCard, sortCards, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
 
 // tiny DOM helper (matches the on*-listener + text-node style used elsewhere)
 function h(tag, attrs = {}, ...kids) {
@@ -35,8 +35,6 @@ mountHeader();
 
 // gameId comes from ?game=<id>; without it there is nothing to replay.
 const gameId = new URLSearchParams(location.search).get('game');
-
-const sortHand = (cards) => [...cards].sort((a, b) => a.rank - b.rank || a.suit - b.suit);
 
 // ---- A4: discard-verdict overlay helpers (mirroring analyze.js's chips/badges) ----
 const isRed = (c) => c.suit === 1 || c.suit === 2; // diamonds, hearts
@@ -85,7 +83,7 @@ const boardTrack = (seat) => seat;
 
 // ---- card rows (face-up everywhere — this is a spectator view) ----
 function handRow(seat, frame) {
-  return h('div', { class: 'hand' }, ...sortHand(frame.hands[seat]).map((c) => cardFace(c)));
+  return h('div', { class: 'hand' }, ...sortCards(frame.hands[seat]).map((c) => cardFace(c)));
 }
 
 // The dealer's deck: the crib (face-up for the replay) and the starter, pushed to
@@ -93,7 +91,7 @@ function handRow(seat, frame) {
 function deckGroup(seat, frame) {
   if (frame.dealer !== seat) return null;
   const kids = [h('span', { class: 'crib-tag' }, 'crib')];
-  if (frame.crib.length) for (const c of frame.crib) kids.push(cardFace(c, { small: true }));
+  if (frame.crib.length) for (const c of sortCards(frame.crib)) kids.push(cardFace(c, { small: true }));
   else kids.push(h('div', { class: 'crib-slot' }, 'crib'));
   if (frame.starter) kids.push(cardFace(frame.starter, { extra: 'show-starter' }));
   return h('div', { class: 'deck' }, ...kids);
@@ -109,7 +107,7 @@ function peggingRow(seat, frame) {
 // The show rows (counted hand + starter + total, then the breakdown), reusing the
 // live table's .show-* markup.
 function showRows(show) {
-  const cards = show.hand.map((c) => cardFace(c));
+  const cards = sortCards(show.hand).map((c) => cardFace(c));
   const starterEl = show.starter ? cardFace(show.starter, { extra: 'show-starter' }) : null;
   const lead = show.isCrib ? [h('span', { class: 'crib-tag' }, 'crib')] : [];
   const showRow = h('div', { class: 'show-row' }, ...lead, ...cards, starterEl,
@@ -166,18 +164,18 @@ function verdictPanel(frame) {
 
   const yours = h('div', { class: 'an-line' },
     h('span', { class: 'an-line-label' }, 'Threw '),
-    ...cardLabels((d.throw || []).map(parseCard)),
+    ...cardLabels(sortCards((d.throw || []).map(parseCard))),
     h('span', { class: 'an-line-sep' }, ' — kept '),
-    ...cardLabels((d.keep || []).map(parseCard)),
+    ...cardLabels(sortCards((d.keep || []).map(parseCard))),
     h('span', { class: 'an-ev' }, ' (EV ' + evFmt(d.keep_ev) + ')'));
 
   const lines = [yours];
   if (!d.optimal) {
     lines.push(h('div', { class: 'an-line an-line-engine' },
       h('span', { class: 'an-line-label' }, 'Engine: throw '),
-      ...cardLabels((d.best_throw || []).map(parseCard)),
+      ...cardLabels(sortCards((d.best_throw || []).map(parseCard))),
       h('span', { class: 'an-line-sep' }, ' — keep '),
-      ...cardLabels((d.best_keep || []).map(parseCard)),
+      ...cardLabels(sortCards((d.best_keep || []).map(parseCard))),
       h('span', { class: 'an-ev' }, ' (EV ' + evFmt(d.best_ev) + ')')));
   }
 
