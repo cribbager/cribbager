@@ -65,17 +65,29 @@ function doJoin() {
 }
 
 const playerName = () => encodeURIComponent(nameInput.value.trim());
+// startAction builds one of the three "create a game" buttons: a title line plus a
+// compact helper sub-label so a newcomer can tell the options apart. `primary`
+// styles the recommended default (playing the computer, for a newcomer).
+function startAction(title, help, onClick, { primary = false } = {}) {
+    const btn = h('button', { class: primary ? 'home-action primary' : 'home-action', type: 'button' },
+        h('span', { class: 'home-action-title' }, title),
+        h('span', { class: 'home-action-help' }, help),
+    );
+    btn.addEventListener('click', onClick);
+    return btn;
+}
+// Play the computer → vs the bot. The instant, no-waiting option, so it is the
+// primary default and listed first for a newcomer.
+const playBot = startAction('Play the computer', 'Play a bot right now',
+    () => go('/game.html?new=bot'), { primary: true });
 // Create a game → a PUBLIC open game that lists in the lobby (public=1). The host
 // lands in the game waiting for anyone to join.
-const createGame = h('button', { class: 'primary' }, 'Create a game');
-createGame.addEventListener('click', () => go('/game.html?new=open&public=1&name=' + playerName()));
+const createGame = startAction('Create a game', 'Open a public game others can join',
+    () => go('/game.html?new=open&public=1&name=' + playerName()));
 // Challenge a friend → a PRIVATE open game (no public flag): link/token only, the
 // host gets a shareable join link.
-const challenge = h('button', {}, 'Challenge a friend');
-challenge.addEventListener('click', () => go('/game.html?new=open&name=' + playerName()));
-// Play the computer → vs the bot (unchanged).
-const playBot = h('button', {}, 'Play the computer');
-playBot.addEventListener('click', () => go('/game.html?new=bot'));
+const challenge = startAction('Challenge a friend', 'Invite someone with a private link',
+    () => go('/game.html?new=open&name=' + playerName()));
 const joinBtn = h('button', {}, 'Join');
 joinBtn.addEventListener('click', doJoin);
 
@@ -158,9 +170,10 @@ const lobbySection = h('div', { class: 'panel home-lobby' },
 
 document.getElementById('home').append(
     h('div', { class: 'home-card' },
-        h('h1', { class: 'home-title' }, 'Cribbage'),
+        h('h1', { class: 'home-title' }, 'Cribbager'),
+        h('p', { class: 'home-tagline' }, 'Play and learn cribbage online — vs the computer or a friend.'),
         nameInput,
-        h('div', { class: 'home-actions' }, createGame, challenge, playBot),
+        h('div', { class: 'home-actions' }, playBot, createGame, challenge),
         h('div', { class: 'home-join' }, joinInput, joinBtn),
         gamesSection,
     ),
