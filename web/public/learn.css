@@ -1,0 +1,121 @@
+/* learn.css — page-specific styles for the "How to Play Cribbage" guide
+   (web/public/learn.html). It reuses the shared F2 design tokens and the
+   .panel / .btn primitives from src/ui/styles.css; this file only adds the
+   reading-layout typography and the small scoring tables. Kept out of the
+   shared stylesheet on purpose so this page owns its own look. */
+
+#learn {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+  color: var(--color-ink);
+  line-height: 1.6;
+}
+
+.learn-title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.learn-lede {
+  color: var(--color-ink-muted);
+  font-size: var(--text-lg, 1.1rem);
+  margin: 0 0 var(--space-5);
+}
+
+/* A reading section: a titled block with comfortable spacing between them. */
+.learn-section { margin: 0 0 var(--space-5); }
+.learn-section > h2 {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.learn-section > h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: var(--space-4) 0 var(--space-2);
+}
+.learn-section p { margin: 0 0 var(--space-3); }
+
+/* The Quick-rules panel sits at the very top; .panel comes from styles.css. */
+.learn-quick { margin: 0 0 var(--space-5); }
+.learn-quick h2 { margin-top: 0; }
+.learn-quick ul { margin: 0; padding-left: var(--space-5); }
+.learn-quick li { margin: 0 0 var(--space-2); }
+
+/* Term definitions get a subtle emphasis the first time they appear. */
+.learn-term { font-weight: 700; color: var(--color-ink); }
+
+/* Scoring tables — compact, parchment-friendly. */
+.learn-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-3) 0;
+  font-size: var(--text-sm, 0.95rem);
+}
+.learn-table caption {
+  text-align: left;
+  font-weight: 700;
+  padding: 0 0 var(--space-2);
+}
+.learn-table th,
+.learn-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+.learn-table thead th {
+  color: var(--color-ink-muted);
+  font-weight: 700;
+  border-bottom: 2px solid var(--color-border);
+}
+.learn-table td.learn-pts {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* "Now go practice" callout that links out to a trainer. */
+.learn-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-felt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.learn-cta-text { flex: 1 1 200px; color: var(--color-ink-soft); margin: 0; }
+.learn-cta .btn { text-decoration: none; white-space: nowrap; }
+
+/* A table of contents up top for quick skimming. */
+.learn-toc { margin: 0 0 var(--space-5); padding: var(--space-4) var(--space-5); }
+.learn-toc h2 { font-size: 16px; margin: 0 0 var(--space-2); }
+.learn-toc ol { margin: 0; padding-left: var(--space-5); }
+.learn-toc li { margin: 0 0 var(--space-1); }
+.learn-toc a { color: var(--color-accent); }
+
+/* The closing "play the computer" CTA — a bigger, centered send-off. */
+.learn-finish {
+  text-align: center;
+  margin: var(--space-6) 0 0;
+  padding: var(--space-5);
+}
+.learn-finish h2 { border: 0; margin: 0 0 var(--space-2); }
+.learn-finish p { color: var(--color-ink-muted); margin: 0 0 var(--space-4); }
+
+/* Glossary as a definition list. */
+.learn-glossary dt { font-weight: 700; margin: var(--space-3) 0 0; }
+.learn-glossary dd { margin: 0 0 var(--space-2); color: var(--color-ink-soft); }
+
+@media (max-width: 560px) {
+  #learn { padding: var(--space-4) var(--space-3) var(--space-5); }
+  .learn-title { font-size: 24px; }
+}
