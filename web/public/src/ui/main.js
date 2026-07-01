@@ -6,8 +6,11 @@
 // every counted element. The opponent is a silent veteran; the only "voice" is
 // functional cribbage language announced as each player plays/counts.
 import { createBoard, straightBoard } from '../board/board.js';
-import { cardsEqual, parseCard, sortCards } from '../engine/cards.js';
+import { cardsEqual, parseCard, sortCards, cardCode } from '../engine/cards.js';
 import { cardFace } from './cardFace.js';
+// AM1: the "Explain the score" overlay re-derives the show breakdown and renders
+// it with the SAME combo-line renderer the Hand Counting Tutorial uses.
+import { buildBreakdownLines, breakdownList } from './comboBreakdown.js';
 import { GameClient } from '../net/client.js';
 import { mountHeader } from './header.js';
 // HUMAN/BOT are UI positions: "me" at the bottom, the opponent at the top.
@@ -217,24 +220,61 @@ function stageEl() {
         return '';
     return h('div', { class: 'stage' }, h('div', { class: 'cut-row' }, h('div', { class: 'cut-seat' }, h('div', { class: 'rail-label' }, 'Opponent'), cardEl(state.cut.cards[BOT])), h('div', { class: 'cut-seat' }, h('div', { class: 'rail-label' }, 'You'), cardEl(state.cut.cards[HUMAN]))), h('div', { class: 'cut-result' }, `${seatName(state.cut.dealer)} deal${state.cut.dealer === HUMAN ? '' : 's'} first.`));
 }
-// The show: top row = the counted hand + starter + big total; second row = the breakdown.
+// The show: top row = the counted hand + starter + big total; second row = a
+// concise "who scored N" plus an "Explain the score" link (AM1). Official play
+// carries no always-on breakdown — the per-combo detail lives behind the overlay,
+// re-derived on demand from the hand + starter (see openExplain).
 function showRows() {
     const sh = state.show;
     const cards = sortCards(sh.hand).map((c) => cardEl(c));
     const starterEl = cardEl(sh.starter, { cls: 'show-starter' });
     const lead = sh.isCrib ? [h('span', { class: 'crib-tag' }, 'crib')] : [];
     const showRow = h('div', { class: 'show-row' }, ...lead, ...cards, starterEl, h('div', { class: 'show-score' }, String(sh.score.total)));
-    const bd = h('div', { class: 'show-breakdown' });
-    if (sh.score.items.length === 0)
-        bd.append(h('span', { class: 'bd-empty' }, 'no points'));
-    else
-        for (const it of sh.score.items) {
-            // Hover-to-highlight the contributing cards could live here, but the
-            // server's scoring deltas don't carry per-combo cards yet (see the
-            // deferred "verbose breakdown" idea), so the chip is just label + points.
-            bd.append(h('span', { class: 'bd-item' }, `${it.label} — ${it.points}`));
-        }
+    const total = sh.score.total;
+    const sentence = sh.isCrib
+        ? `The crib scores ${total}`
+        : `${sh.player === HUMAN ? 'You' : oppLabel} scored ${total}`;
+    const bd = h('div', { class: 'show-breakdown' }, h('span', { class: 'show-total' }, sentence));
+    const explain = h('button', { class: 'explain-btn' }, 'Explain the score');
+    explain.addEventListener('click', () => openExplain(sh));
+    bd.append(explain);
     return [showRow, bd];
+}
+
+// openExplain shows a display-only modal breaking the hand (or crib) down as
+// `[cards] <combo> for <running count>`, the same style as the Hand Counting
+// Tutorial. The live show deltas carry combos WITHOUT per-combo cards, so the
+// breakdown is re-derived on demand via the stateless POST /tools/score-hand
+// endpoint (crib:true for the crib, whose flush needs all five cards). It touches
+// no game state — closing it just removes the overlay.
+async function openExplain(sh) {
+    const title = sh.isCrib ? 'The crib' : `${sh.player === HUMAN ? 'Your' : oppLabel + '’s'} hand`;
+    const body = h('div', { class: 'explain-body' }, h('div', { class: 'sq-answer-loading' }, 'Scoring…'));
+    const close = h('button', { class: 'primary' }, 'Close');
+    const overlay = h('div', { class: 'overlay' });
+    close.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
+    overlay.append(h('div', { class: 'card-modal explain-modal' },
+        h('h2', {}, title), body, h('div', {}, close)));
+    document.body.append(overlay);
+
+    const hand = sortCards(sh.hand).slice(0, 4).map(cardCode);
+    const starter = cardCode(sh.starter);
+    let data;
+    try {
+        const r = await fetch('/tools/score-hand', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hand, starter, crib: sh.isCrib }),
+        });
+        if (!r.ok) throw new Error('bad status');
+        data = await r.json();
+    } catch {
+        body.replaceChildren(h('p', {}, 'Sorry — we couldn’t load the breakdown.'));
+        return;
+    }
+    const { lines } = buildBreakdownLines(data.combos || [], data.total || 0);
+    body.replaceChildren(breakdownList(lines));
 }
 // ---------- main render (the board self-manages inside boardMount) ----------
 function render() {
@@ -498,18 +538,11 @@ const RANK_TX = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q',
 const cardToStr = (c) => RANK_TX[c.rank] + 'CDHS'[c.suit];
 const C = (s) => parseCard(s);
 const CS = (a) => (a ?? []).map(C);
-function comboLabel(c) {
-    switch (c.kind) {
-        case 'fifteen': return 'fifteen';
-        case 'pair': return c.points === 6 ? 'pair royal' : c.points === 12 ? 'double pair royal' : 'pair';
-        case 'run': return `run of ${c.length}`;
-        case 'flush': return 'flush';
-        case 'nobs': return 'nobs';
-        default: return c.kind;
-    }
-}
+// The live show delta carries the total (and combos WITHOUT per-combo cards). We
+// only need the total inline; the per-combo breakdown is re-derived on demand via
+// /tools/score-hand when the player opens "Explain the score" (see openExplain).
 function showScore(d) {
-    return { total: d.total, items: (d.combos ?? []).map((c) => ({ label: comboLabel(c), points: c.points, cards: [] })) };
+    return { total: d.total };
 }
 function skunkOf(scores, winner) {
     const lose = scores[1 - winner];
