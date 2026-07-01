@@ -143,6 +143,7 @@ export function mountHeader({ onAuthChange } = {}) {
     // Tools nav, available to everyone (no auth): the discard trainer is a
     // dedicated learning surface, where analysis/teaching belongs.
     const nav = h('nav', { class: 'site-nav', 'aria-label': 'Tools' },
+        h('a', { class: 'site-nav-link', href: '/learn.html' }, 'How to play'),
         h('a', { class: 'site-nav-link', href: '/practice.html' }, 'Practice'),
         h('a', { class: 'site-nav-link', href: '/practice-scoring.html' }, 'Hand Counting'),
     );

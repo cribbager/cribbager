@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>How to Play Cribbage · Cribbager</title>
+    <meta name="description" content="A beginner-friendly guide to the rules of two-player cribbage: the deal, the crib, the cut, pegging, and counting the show." />
+    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <link rel="icon" href="data:," />
+    <!-- Shared F2 tokens + .panel / .btn primitives. -->
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+    <!-- Page-specific reading layout (kept out of the shared stylesheet). -->
+    <link rel="stylesheet" href="/learn.css" />
+  </head>
+  <body>
+    <!-- Global site header (wordmark + Tools nav + auth/identity), mounted by header.js. -->
+    <header id="site-header"></header>
+
+    <main id="learn">
+      <h1 class="learn-title">How to Play Cribbage</h1>
+      <p class="learn-lede">
+        Cribbage is a card game for two players (the version here) built around a race
+        to 121 points. This guide covers the rules only — enough to sit down and play a
+        full hand. It assumes no prior knowledge; every term is defined the first time it
+        appears.
+      </p>
+
+      <!-- ============ QUICK RULES ============ -->
+      <section class="panel learn-quick" aria-labelledby="quick-h">
+        <h2 id="quick-h">Quick rules</h2>
+        <ul>
+          <li><strong>Players &amp; goal:</strong> two players race to be first to <strong>121 points</strong>.</li>
+          <li><strong>The deal:</strong> each player is dealt <strong>6 cards</strong>; the deal alternates each hand.</li>
+          <li><strong>The crib:</strong> each player throws <strong>2 cards</strong> into a separate 4-card hand called the <em>crib</em>, which belongs to the <strong>dealer</strong>.</li>
+          <li><strong>The starter:</strong> the non-dealer cuts the deck and the dealer turns up one card, the <em>starter</em>, used by every hand when counting.</li>
+          <li><strong>The play (pegging):</strong> players alternately lay cards and call the running total, never going past <strong>31</strong>, scoring for fifteens, thirty-ones, pairs, runs, and the last card.</li>
+          <li><strong>The show:</strong> after the play, each player counts their hand plus the starter for fifteens, pairs, runs, flushes, and his nobs. <strong>The non-dealer counts first.</strong></li>
+          <li><strong>The crib:</strong> the dealer then counts the crib the same way, as a bonus hand.</li>
+          <li><strong>Winning:</strong> the first player to reach <strong>121</strong> wins — the game can end mid-count.</li>
+        </ul>
+      </section>
+
+      <!-- ============ CONTENTS ============ -->
+      <nav class="panel learn-toc" aria-label="Contents">
+        <h2>On this page</h2>
+        <ol>
+          <li><a href="#object">The object &amp; the board</a></li>
+          <li><a href="#deal">The deal</a></li>
+          <li><a href="#crib">The crib (discard)</a></li>
+          <li><a href="#cut">The cut &amp; the starter</a></li>
+          <li><a href="#play">The play (pegging)</a></li>
+          <li><a href="#show">Counting the show</a></li>
+          <li><a href="#cribcount">The crib count</a></li>
+          <li><a href="#winning">Winning</a></li>
+          <li><a href="#glossary">Glossary</a></li>
+        </ol>
+      </nav>
+
+      <!-- ============ OBJECT & BOARD ============ -->
+      <section class="learn-section" id="object">
+        <h2>1. The object &amp; the board</h2>
+        <p>
+          The object of cribbage is to be the first player to score <strong>121 points</strong>.
+          Points are earned in two ways in each hand: during <em>the play</em> and during
+          <em>the count</em> (also called <em>the show</em>).
+        </p>
+        <p>
+          Scores are tracked on a <span class="learn-term">cribbage board</span>, a peg board
+          with two rows of 60 holes plus a final game hole per player. You move a peg forward
+          one hole per point, going up the board and back down — "twice around" a standard board
+          is 120, and the last hole is 121. Because you always have two pegs, the rearmost peg
+          shows your previous score and the front peg your current one, so it is easy to see how
+          many points each play was worth.
+        </p>
+        <p>
+          A game is a series of <span class="learn-term">hands</span>. Each hand follows the same
+          sequence: deal, discard to the crib, cut the starter, the play, then the count. The
+          deal passes to the other player after each hand, and hands repeat until someone reaches 121.
+        </p>
+      </section>
+
+      <!-- ============ THE DEAL ============ -->
+      <section class="learn-section" id="deal">
+        <h2>2. The deal</h2>
+        <p>
+          Using a standard 52-card deck, the dealer deals <strong>6 cards</strong> to each player,
+          one at a time, face down. (In two-player cribbage it is 6 cards each; other player counts
+          use 5.) Players pick up and look at their own six cards.
+        </p>
+        <p>
+          The role of <span class="learn-term">dealer</span> alternates every hand. Being dealer
+          matters because the dealer owns the crib (see below), so over a game the small advantage
+          of the crib is shared evenly. To decide who deals first, players usually each cut the deck
+          and the lower card deals.
+        </p>
+      </section>
+
+      <!-- ============ THE CRIB ============ -->
+      <section class="learn-section" id="crib">
+        <h2>3. The crib (discard)</h2>
+        <p>
+          Before the play begins, each player chooses <strong>2 of their 6 cards</strong> to discard
+          face down into the <span class="learn-term">crib</span> — a separate, fifth hand of four
+          cards. This leaves each player with the four cards they will keep and play.
+        </p>
+        <p>
+          The crib belongs to the <strong>dealer</strong>: at the end of the hand the dealer counts
+          it as an extra hand for points. So when you discard, you are helping your own crib if you
+          are the dealer, and helping your opponent's crib if you are not. The non-dealer is
+          sometimes called the <span class="learn-term">pone</span>.
+        </p>
+        <div class="learn-cta">
+          <p class="learn-cta-text">Ready to try choosing a discard? The discard trainer deals you a hand and shows how each choice scores.</p>
+          <a class="btn btn-primary" href="/practice.html">Open the discard trainer</a>
+        </div>
+      </section>
+
+      <!-- ============ THE CUT / STARTER ============ -->
+      <section class="learn-section" id="cut">
+        <h2>4. The cut &amp; the starter</h2>
+        <p>
+          After the crib is set, the non-dealer <span class="learn-term">cuts</span> the deck (lifts
+          off a portion), and the dealer turns up the top card of the bottom portion. This face-up
+          card is the <span class="learn-term">starter</span> (also called the "cut" or "turn-up").
+        </p>
+        <p>
+          The starter is <em>not</em> played. Instead it acts as a shared fifth card for every hand
+          and the crib when counting at the end of the hand.
+        </p>
+        <p>
+          If the starter is a <strong>Jack</strong>, the dealer immediately pegs <strong>2 points</strong>.
+          This is called <span class="learn-term">"his heels"</span> (or "his nibs"). It is the only
+          score that comes straight from the cut.
+        </p>
+      </section>
+
+      <!-- ============ THE PLAY / PEGGING ============ -->
+      <section class="learn-section" id="play">
+        <h2>5. The play (pegging)</h2>
+        <p>
+          Now the players play their four cards in alternating turns, starting with the non-dealer.
+          As each card is laid down, the player says the new <span class="learn-term">running total</span>
+          of all cards played so far. Face cards (J, Q, K) count as 10, aces count as 1, and every
+          other card counts its face value.
+        </p>
+        <p>
+          The running total may never exceed <strong>31</strong>. On your turn you must play a card if
+          you can do so without going over 31. Scoring during the play is called
+          <span class="learn-term">pegging</span>, because points are pegged the moment they happen:
+        </p>
+
+        <table class="learn-table">
+          <caption>Pegging scores (during the play)</caption>
+          <thead>
+            <tr><th scope="col">You score…</th><th scope="col">When…</th><th scope="col">Points</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Fifteen</td><td>Your card brings the running total to exactly 15</td><td class="learn-pts">2</td></tr>
+            <tr><td>Thirty-one</td><td>Your card brings the running total to exactly 31</td><td class="learn-pts">2</td></tr>
+            <tr><td>Pair</td><td>You match the rank of the card just played</td><td class="learn-pts">2</td></tr>
+            <tr><td>Pair royal (three of a kind)</td><td>A third card of that rank in a row</td><td class="learn-pts">6</td></tr>
+            <tr><td>Double pair royal (four of a kind)</td><td>A fourth card of that rank in a row</td><td class="learn-pts">12</td></tr>
+            <tr><td>Run</td><td>Your card completes a run of 3+ consecutive ranks (in any order)</td><td class="learn-pts">1 per card</td></tr>
+            <tr><td>Go</td><td>The opponent cannot play without exceeding 31, so they say "go"</td><td class="learn-pts">1</td></tr>
+            <tr><td>Last card</td><td>You play the final card before the count resets and it is not a 31</td><td class="learn-pts">1</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          When a player cannot play without going over 31, they say <span class="learn-term">"go"</span>.
+          The other player then pegs 1 for the go and continues playing any cards they still can. When
+          neither player can play, the player who laid the last card pegs <strong>1 for the last card</strong>
+          (or 2 if it hit exactly 31). The running total then resets to zero and play continues with
+          any remaining cards, starting with the player after the one who last played. Pairs and runs
+          only count within the current run of cards — they are broken by a reset.
+        </p>
+      </section>
+
+      <!-- ============ COUNTING THE SHOW ============ -->
+      <section class="learn-section" id="show">
+        <h2>6. Counting the show</h2>
+        <p>
+          After all cards are played, players pick their four cards back up and count them for points.
+          This is <span class="learn-term">the show</span>. Each player counts their <strong>four hand
+          cards plus the starter</strong> as a five-card group. The <strong>non-dealer counts first</strong>
+          — this matters near the end of a game, because reaching 121 first wins even if the dealer
+          would have counted more.
+        </p>
+
+        <table class="learn-table">
+          <caption>Counting scores (the show)</caption>
+          <thead>
+            <tr><th scope="col">You score…</th><th scope="col">For…</th><th scope="col">Points</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Fifteen</td><td>Each distinct combination of cards adding to exactly 15</td><td class="learn-pts">2</td></tr>
+            <tr><td>Pair</td><td>Each pair of cards of the same rank</td><td class="learn-pts">2</td></tr>
+            <tr><td>Run</td><td>Each run of 3+ consecutive ranks</td><td class="learn-pts">1 per card</td></tr>
+            <tr><td>Flush (hand)</td><td>All four hand cards the same suit</td><td class="learn-pts">4</td></tr>
+            <tr><td>Flush (with starter)</td><td>All four hand cards <em>and</em> the starter the same suit</td><td class="learn-pts">5</td></tr>
+            <tr><td>His nobs</td><td>Holding the Jack of the same suit as the starter</td><td class="learn-pts">1</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          A few clarifications that trip up beginners:
+        </p>
+        <p>
+          <strong>Fifteens</strong> count every distinct combination separately. For example, if three
+          different cards each total 15 with others, each combination scores 2. <strong>Pairs</strong>
+          from three of a kind are worth 6 (three pairs), and four of a kind is worth 12.
+          <strong>Runs</strong> score one point per card, and if you hold a duplicate rank a "double run"
+          scores each run separately (e.g. 4-5-5-6 is two runs of three plus a pair). Face cards all count
+          10 for fifteens but keep their own rank for pairs and runs (a Jack and Queen are not a pair,
+          but they are consecutive for a run).
+        </p>
+        <div class="learn-cta">
+          <p class="learn-cta-text">Counting takes practice. The Hand Counting Tutorial deals a hand and checks your total, breaking down every point.</p>
+          <a class="btn btn-primary" href="/practice-scoring.html">Open the Hand Counting Tutorial</a>
+        </div>
+      </section>
+
+      <!-- ============ THE CRIB COUNT ============ -->
+      <section class="learn-section" id="cribcount">
+        <h2>7. The crib count</h2>
+        <p>
+          After both players have counted their hands, the dealer turns over the crib and counts it
+          too — again as four cards plus the starter, using exactly the same scoring rules. The crib
+          is a bonus that only the dealer scores, which is why the deal alternates.
+        </p>
+        <p>
+          There is one difference: a <strong>crib flush needs all five cards of the same suit</strong>
+          (the four crib cards <em>and</em> the starter). A four-card flush counts in a hand but never
+          in the crib.
+        </p>
+      </section>
+
+      <!-- ============ WINNING ============ -->
+      <section class="learn-section" id="winning">
+        <h2>8. Winning</h2>
+        <p>
+          The first player to reach <strong>121 points</strong> wins immediately. Because scoring is
+          incremental — pegged during the play and tallied combination-by-combination during the count —
+          <strong>the game can end mid-count</strong>. As soon as a peg reaches the final hole the game
+          is over, even if the player had more points left to count. This is why the non-dealer counting
+          first can be decisive in a close game.
+        </p>
+      </section>
+
+      <!-- ============ GLOSSARY ============ -->
+      <section class="learn-section" id="glossary">
+        <h2>Glossary</h2>
+        <dl class="learn-glossary">
+          <dt>The crib</dt>
+          <dd>The fifth hand, made of the two cards each player discards. It is counted by the dealer at the end of the hand.</dd>
+          <dt>Pone</dt>
+          <dd>The non-dealer. The pone plays first during the play and counts their hand first during the show.</dd>
+          <dt>The cut / the starter</dt>
+          <dd>The face-up card turned after the non-dealer cuts the deck. It is shared by every hand and the crib when counting; it is not played during the play.</dd>
+          <dt>His heels</dt>
+          <dd>2 points the dealer pegs when the starter card is a Jack. Sometimes called "his nibs."</dd>
+          <dt>His nobs</dt>
+          <dd>1 point for holding the Jack of the same suit as the starter, scored during the count. (Different from "his heels," which comes from the cut.)</dd>
+          <dt>Go</dt>
+          <dd>What you say when you cannot play a card without the running total exceeding 31. The other player pegs 1 for the go.</dd>
+          <dt>Pegging</dt>
+          <dd>Scoring points during the play, so called because the points are moved on the board immediately.</dd>
+          <dt>Muggins (optional)</dt>
+          <dd>An optional house rule: if you overlook points in your own count, an alert opponent may claim them by calling "muggins." Cribbager does not use muggins — your hand is always scored in full.</dd>
+        </dl>
+      </section>
+
+      <!-- ============ CLOSING CTA ============ -->
+      <section class="panel learn-finish" aria-labelledby="finish-h">
+        <h2 id="finish-h">Ready to play?</h2>
+        <p>Learn by doing. Start a game against the computer and put a full hand together — deal, discard, cut, play, and count.</p>
+        <a class="btn btn-primary" href="/game.html?new=bot">Play the computer</a>
+      </section>
+    </main>
+
+    <!-- The page is static content; this only mounts the shared site header. -->
+    <script type="module">
+      import { mountHeader } from '/src/ui/header.js';
+      mountHeader();
+    </script>
+  </body>
+</html>
