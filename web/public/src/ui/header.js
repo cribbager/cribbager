@@ -146,8 +146,7 @@ export function mountHeader({ onAuthChange } = {}) {
     // (CSS-driven — see .site-nav-menu). Play mirrors the home page's three start
     // options; Learn gathers the learning surfaces.
     const navMenu = (label, topHref, items) => {
-        const top = h('a', { class: 'site-nav-top', href: topHref },
-            label, h('span', { class: 'site-nav-caret', 'aria-hidden': 'true' }, '▾'));
+        const top = h('a', { class: 'site-nav-top', href: topHref }, label);
         const dropdown = h('div', { class: 'site-nav-dropdown', role: 'menu' },
             ...items.map((it) => h('a', { class: 'site-nav-drop-item', role: 'menuitem', href: it.href }, it.label)));
         return h('div', { class: 'site-nav-menu' }, top, dropdown);

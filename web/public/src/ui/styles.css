@@ -159,12 +159,12 @@ html, body {
    under the label (no gap) so the pointer can travel into it without closing. */
 .site-nav-menu { position: relative; }
 .site-nav-top {
-  display: inline-flex; align-items: center; gap: 3px;
+  display: inline-flex; align-items: center;
   font-weight: 700; font-size: var(--text-sm); color: var(--color-ink-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
   text-decoration: none; padding: var(--space-1) 0; cursor: pointer;
 }
 .site-nav-top:hover { color: var(--color-accent); }
-.site-nav-caret { font-size: 9px; opacity: 0.8; }
 .site-nav-dropdown {
   position: absolute; left: 0; top: 100%; z-index: 60; min-width: 210px;
   display: none; padding: var(--space-1);
