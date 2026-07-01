@@ -244,9 +244,13 @@ html, body {
 /* AM1: the live show now reads "You scored N" + an "Explain the score" link; the
    per-combo detail opens in a modal (reusing the tutorial's .sq-combo rows). */
 .show-total { font-size: 16px; font-weight: 700; align-self: center; }
-.explain-btn { background: none; border: 0; padding: 0; cursor: pointer; align-self: center;
-  font: inherit; font-weight: 700; color: var(--accent); text-decoration: underline; }
-.explain-btn:hover { color: var(--color-ink); }
+/* A clear tappable pill (not a bare text link) so "Explain the score" reads as an
+   action; fills with the accent on hover/focus. */
+.explain-btn { align-self: center; margin-top: 8px; cursor: pointer; font: inherit;
+  font-weight: 700; font-size: 13px; color: var(--color-accent); background: none;
+  border: 1px solid var(--color-accent); border-radius: var(--radius-pill); padding: 5px 16px;
+  transition: background var(--transition-fast), color var(--transition-fast); }
+.explain-btn:hover, .explain-btn:focus-visible { background: var(--color-accent); color: var(--color-on-accent); }
 .explain-modal { text-align: left; max-width: 460px; }
 .explain-modal h2 { text-align: center; }
 .explain-body { margin: 6px 0 18px; min-width: 280px; }
