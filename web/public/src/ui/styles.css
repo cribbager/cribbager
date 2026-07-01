@@ -589,8 +589,12 @@ button:active { transform: translateY(1px); }
    the show layout, the single control row, and the inline combo list are new. */
 #scoring-quiz { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4); }
 
-/* Practice / Show-me segmented toggle above the deck. */
-.sq-modes { display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radius-pill); overflow: hidden; margin-bottom: var(--space-3); }
+/* Practice / Show-me segmented toggle above the deck. It sits as a direct child of
+   the column-flex .pr-board, whose default align-items: stretch would blow the
+   inline-flex pill out to the full panel width; align-self: flex-start keeps a
+   segmented toggle shrunk to its content and left-aligned. (The discard trainer's
+   .pr-seg-group is nested inside a row-flex .pr-controls, so it is not stretched.) */
+.sq-modes { display: inline-flex; align-self: flex-start; border: 1px solid var(--color-border); border-radius: var(--radius-pill); overflow: hidden; margin-bottom: var(--space-3); }
 .sq-mode-tab { background: none; border: 0; cursor: pointer; font-weight: 700; font-size: var(--text-sm); color: var(--color-ink-muted); padding: var(--space-2) var(--space-4); }
 .sq-mode-tab.is-active { background: var(--color-accent); color: #fff; }
 .sq-answer-loading { color: var(--color-ink-muted); font-weight: 600; }
@@ -633,6 +637,9 @@ button:active { transform: translateY(1px); }
 .sq-combo.is-wrong .sq-combo-call { text-decoration: line-through; }
 .sq-combo.is-wrong .sq-combo-cards { opacity: 0.5; }
 .sq-combo.is-missed .sq-combo-call { color: var(--color-ink); }
+/* Teaching correction on a right-cards / wrong-count line: the count it should
+   read, shown in full ink (not struck) beside the crossed-out entered count. */
+.sq-combo-fix { font-weight: 700; color: var(--color-ink); }
 /* Leading chip on each scoring line, flush left: the remove (✕) button before
    grading; a green ✓ / red ✕ circle after. */
 .sq-status, .sq-decl-remove {

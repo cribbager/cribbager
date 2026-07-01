@@ -5,12 +5,17 @@
 // cumulative total after that combo). Your total for grading is simply the
 // running count of the last combo you declare. Grading runs the engine via POST
 // /tools/score-hand (scoring/hand.Score on the server) — no scoring is
-// reimplemented here. The verdict grades the CARDS, not just the number: it reads
-// Correct only when every declared combo matches a distinct engine combo, nothing
-// is missed, AND the running total equals the engine's — so the right number with
-// the wrong cards is still Wrong. Teaching feedback is rendered in place over the
-// list either way: declarations that don't match an engine combo are crossed out,
-// and combos you missed are appended; the correct/wrong graphic sits at the bottom.
+// reimplemented here. The verdict grades every line on BOTH its cards and its
+// running count: a line reads Correct (green ✓) only when its cards match a
+// distinct engine combo AND the running count you typed equals the correct running
+// count at that point. The overall verdict is Correct only when every declared
+// line is green and nothing is missed. Because the last correct line's running
+// count is necessarily the engine total, all-green always means Correct — it is
+// impossible to see every line ✓ yet an overall "Not quite". Teaching feedback is
+// rendered in place: a line with the wrong cards is crossed out (it counts for
+// nothing); a line with the right cards but a wrong running count is crossed out
+// too, but shows the count it should read; combos you missed are appended; the
+// correct/wrong graphic sits at the bottom.
 // This is exactly where teaching belongs — official games carry no in-game coaching.
 
 import { mountHeader } from './header.js';
@@ -281,8 +286,6 @@ function declaredTotal() {
 async function submit() {
     if (state.busy || state.result) return;
 
-    const declTotal = declaredTotal();
-
     state.busy = true;
     state.error = null;
     render();
@@ -319,58 +322,84 @@ async function submit() {
     }
 
     state.busy = false;
-    state.result = grade(declTotal, data.combos || [], data.total || 0);
+    state.result = grade(data.combos || [], data.total || 0);
     render();
 }
 
 // grade reduces the engine's combos AND the user's declarations to atomic
-// components and matches them in that common alphabet. A declaration is correct
-// iff EVERY one of its atoms is found unconsumed in the engine pool (which it then
-// consumes); otherwise it's wrong and consumes nothing. This is what lets a double
-// run be declared bundled or fully decomposed and grade the same. nobs atoms match
+// components and matches them in that common alphabet, then grades each line on
+// BOTH its cards and the running count the user typed.
+//
+// Cards (cardsOk): a declaration's cards are right iff EVERY one of its atoms is
+// found unconsumed in the engine pool (which it then consumes); otherwise the
+// cards are wrong and the declaration consumes nothing. This is what lets a double
+// run be declared bundled or fully decomposed and grade the same; nobs atoms match
 // leniently. Leftover engine atoms become the "missed" list, each its own line.
-function grade(declTotal, rawCombos, engineTotal) {
+//
+// Running count: the expected running count at a line is the cumulative of the
+// REAL points over the sequence of CORRECTLY-CARDED declarations, in order. A
+// card-wrong line breaks the chain — it contributes 0 and is skipped — so a later
+// correct line's expected count is the running total of the correct-carded points
+// only. A line is fully correct (green ✓) iff its cards match AND the count the
+// user typed equals that expected running count. This keeps the per-line marks and
+// the overall verdict logically consistent: since the last correct line's running
+// count is exactly the sum of all correct-carded points, "every line green + none
+// missed" necessarily equals the engine total, so all-green ⇒ Correct always and a
+// separate declTotal===engineTotal check is redundant.
+function grade(rawCombos, engineTotal) {
     const pool = [];
     for (const c of rawCombos)
         for (const a of atomsFromEngineCombo(c)) pool.push({ ...a, used: false });
 
+    // First pass — cards only: decide each declaration's cardsOk and its real point
+    // value, independent of the running count the user typed.
     const declared = state.declarations.map((d) => {
         const entry = kindById(d.kindId);
         const cards = d.idxs.map((idx) => state.cards[idx]);
         const want = atomsFromDeclaration(entry, cards);
         // Find a distinct unconsumed pool atom for each wanted atom; only commit
-        // (consume) if ALL are found, so a wrong declaration leaves the pool intact.
+        // (consume) if ALL are found, so a card-wrong declaration leaves the pool intact.
         const found = [];
-        let ok = want.length > 0;
+        let cardsOk = want.length > 0;
         for (const a of want) {
             const m = pool.find((p) => !p.used && !found.includes(p) && atomsMatch(p, a));
-            if (!m) { ok = false; break; }
+            if (!m) { cardsOk = false; break; }
             found.push(m);
         }
-        if (ok) for (const m of found) m.used = true;
-        const points = ok ? want.reduce((s, a) => s + a.points, 0) : 0;
-        return { kindId: d.kindId, cards, count: d.count, correct: ok, points };
+        if (cardsOk) for (const m of found) m.used = true;
+        const points = cardsOk ? want.reduce((s, a) => s + a.points, 0) : 0;
+        return { kindId: d.kindId, cards, count: d.count, cardsOk, points };
     });
 
     const missed = pool.filter((p) => !p.used)
         .map((p) => ({ kind: p.kind, cards: p.cards, points: p.points, runLen: p.runLen }));
 
-    // Corrected running count: the cumulative of the REAL points, skipping wrong
-    // declarations. Each correct/missed combo gets the count it SHOULD show there,
-    // so a valid combo no longer carries a running total inflated by a wrong one
-    // above it (and the progression ends at the engine total).
+    // Second pass — running count: walk the declarations in order, accumulating the
+    // real points of correctly-carded lines only. Each correct-carded line records
+    // the running count it SHOULD read (correctCount); a line is green only if the
+    // count the user typed matches it. Card-wrong lines don't advance the chain and
+    // carry no expected running count.
     let run = 0;
-    for (const d of declared) { if (d.correct) { run += d.points; d.correctCount = run; } }
+    for (const d of declared) {
+        if (d.cardsOk) {
+            run += d.points;
+            d.correctCount = run;            // the running count this line should read
+            d.correct = d.count === run;     // green only when cards AND count agree
+        } else {
+            d.correctCount = null;
+            d.correct = false;
+        }
+    }
+    // Missed atoms continue the same running count so the teaching progression ends
+    // at the engine total.
     for (const m of missed) { run += m.points; m.correctCount = run; }
 
-    // The verdict grades the CARDS, not just the number: Correct requires every
-    // declaration to match a distinct engine combo (none wrong), no engine combo
-    // left undeclared (none missed), AND the running total to equal the engine's.
-    // This way a hand that happens to sum to the right number with the wrong cards
-    // reads Wrong, not Correct.
-    const correct = declared.every((d) => d.correct) && missed.length === 0 && declTotal === engineTotal;
+    // Overall verdict: every declared line green (cards right AND count right) and
+    // nothing missed. All-green + none-missed ⇒ the last line's running count equals
+    // the engine total, so "all lines ✓ yet Not quite" is impossible by construction.
+    const correct = declared.every((d) => d.correct) && missed.length === 0;
 
-    return { correct, total: engineTotal, declTotal, declared, missed };
+    return { correct, total: engineTotal, declared, missed };
 }
 
 // buildAnswer turns the engine's combos into the Show-me breakdown: every combo
@@ -486,6 +515,8 @@ function renderControls() {
 // call ("double run of 3", "fifteen", …). For a declaration the number is the
 // running count after it; for a missed engine atom it's the atom's own points.
 // opts.wrong crosses it out; opts.missed marks it as one the user didn't declare.
+// opts.correctNumber, when set, appends the running count the line SHOULD read
+// (not struck) — used to teach when the cards are right but the entered count is wrong.
 function comboLine(cards, phrase, forNumber, opts = {}) {
     const cls = 'sq-combo'
         + (opts.wrong ? ' is-wrong' : '')
@@ -510,6 +541,11 @@ function comboLine(cards, phrase, forNumber, opts = {}) {
         h('span', { class: 'sq-combo-cards' }, ...sortCards(cards).map((c) => cardFace(c, { small: true }))),
         h('span', { class: 'sq-combo-call' }, `${phrase} for ${forNumber}`),
     );
+    // Right cards, wrong running count: show the count it should have read, not
+    // struck through, so the line still teaches the correct progression.
+    if (opts.correctNumber != null) {
+        kids.push(h('span', { class: 'sq-combo-fix' }, `should be ${opts.correctNumber}`));
+    }
     return h('div', { class: cls }, ...kids);
 }
 
@@ -543,11 +579,19 @@ function renderDeclared() {
 
     if (state.result) {
         for (const d of state.result.declared) {
-            // Correct combos show the corrected running count (what it should be
-            // there); wrong ones show what the user entered, struck through. The
-            // phrase comes from the user's chosen kind ("double run of 3").
-            const forN = d.correct ? d.correctCount : d.count;
-            rows.push(comboLine(d.cards, callPhrase(d.kindId), forN, { wrong: !d.correct, status: d.correct ? 'correct' : 'wrong' }));
+            // Three cases, so the marks never contradict the verdict:
+            //  - cards right AND count right → green ✓, showing the running count.
+            //  - cards right BUT count wrong → ✕, entered count struck through, with
+            //    the correct running count shown alongside to teach.
+            //  - cards wrong → ✕, struck through; it counts for nothing.
+            // The phrase comes from the user's chosen kind ("double run of 3").
+            if (d.correct) {
+                rows.push(comboLine(d.cards, callPhrase(d.kindId), d.correctCount, { status: 'correct' }));
+            } else if (d.cardsOk) {
+                rows.push(comboLine(d.cards, callPhrase(d.kindId), d.count, { wrong: true, status: 'wrong', correctNumber: d.correctCount }));
+            } else {
+                rows.push(comboLine(d.cards, callPhrase(d.kindId), d.count, { wrong: true, status: 'wrong' }));
+            }
         }
         for (const m of state.result.missed) {
             // Missed lines are atomic, so they read as the bare atom ("run of 3").
