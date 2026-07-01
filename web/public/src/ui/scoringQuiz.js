@@ -20,7 +20,13 @@
 
 import { mountHeader } from './header.js';
 import { cardFace } from './cardFace.js';
-import { parseCard, cardCode, sortCards } from '../engine/cards.js';
+import { cardCode, sortCards } from '../engine/cards.js';
+// Pure grading logic lives in scoringQuizGrading.js (DOM-free, unit-tested). This
+// UI module owns state + rendering and passes resolved declarations into grade().
+import {
+    KINDS, kindById, callPhrase, atomPhrase,
+    atomsFromEngineCombo, grade,
+} from './scoringQuizGrading.js';
 
 // tiny DOM helper (matches the on*-listener + text-node style used elsewhere)
 function h(tag, attrs = {}, ...kids) {
@@ -37,36 +43,9 @@ function h(tag, attrs = {}, ...kids) {
 const root = document.getElementById('scoring-quiz');
 mountHeader();
 
-// The combo kinds the user can declare — the full vocabulary a player counts
-// aloud, in conventional counting order. Compound combos (pair royal, double
-// runs, …) are first-class entries: grading reduces BOTH them and the engine's
-// bundled combos to the same multiset of ATOMIC components (see grade()), so a
-// player may declare a double run either as one bundle or fully decomposed and
-// both read Correct. Each entry has an `id` (dropdown value), a `family`
-// (fifteen | pair | run | flush | nobs) driving atom generation, a `count`
-// (exact card count, or [min,max] for the looser fifteen/flush/nobs) for
-// add-time validation, and a `call` (how it's read aloud).
-const KINDS = [
-    { id: 'fifteen', label: 'Fifteen', family: 'fifteen', count: [2, 5], call: 'fifteen' },
-    { id: 'pair', label: 'Pair', family: 'pair', count: 2, call: 'pair' },
-    { id: 'pairroyal', label: 'Pair royal', family: 'pair', count: 3, call: 'pair royal' },
-    { id: 'doublepairroyal', label: 'Double pair royal', family: 'pair', count: 4, call: 'double pair royal' },
-    { id: 'run3', label: 'Run of 3', family: 'run', count: 3, call: 'run of 3' },
-    { id: 'run4', label: 'Run of 4', family: 'run', count: 4, call: 'run of 4' },
-    { id: 'run5', label: 'Run of 5', family: 'run', count: 5, call: 'run of 5' },
-    { id: 'doublerun3', label: 'Double run of 3', family: 'run', count: 4, call: 'double run of 3' },
-    { id: 'doublerun4', label: 'Double run of 4', family: 'run', count: 5, call: 'double run of 4' },
-    { id: 'doubledoublerun3', label: 'Double double run of 3', family: 'run', count: 5, call: 'double double run of 3' },
-    { id: 'triplerun3', label: 'Triple run of 3', family: 'run', count: 5, call: 'triple run of 3' },
-    { id: 'flush', label: 'Flush', family: 'flush', count: [4, 5], call: 'flush' },
-    { id: 'nobs', label: 'Nobs', family: 'nobs', count: [1, 2], call: 'nobs' },
-];
-const kindById = (id) => KINDS.find((k) => k.id === id) || KINDS[0];
-// callPhrase reads a DECLARATION aloud from its dropdown id ("double run of 3").
-// atomPhrase reads a single ATOMIC component (used for missed lines): runs fold
-// in their length ("run of 3"); everything else is the bare type word.
-const callPhrase = (kindId) => kindById(kindId).call;
-const atomPhrase = (a) => (a.kind === 'run' ? `run of ${a.runLen}` : a.kind);
+// The declarable combo vocabulary (KINDS), kindById, and the call/atom phrase
+// helpers live in scoringQuizGrading.js alongside the grading logic, and are
+// imported above so the UI and the grader share one source of truth.
 
 // dealShow returns five distinct random cards by shuffling a fresh 52-card deck:
 // the first four are the hand (sorted for display), the fifth is the starter.
@@ -182,97 +161,9 @@ function removeDeclaration(idx) {
     render();
 }
 
-// cardKey is an order-independent identity for a set of cards (their wire codes,
-// sorted) used to match one atomic component against another.
-const cardKey = (cards) => cards.map(cardCode).sort().join(',');
-
-// --- atomic decomposition -----------------------------------------------------
-// Grading reduces every combo — engine-reported or user-declared — to the same
-// alphabet of ATOMIC components: a 2-pt fifteen, a 2-pt pair (exactly 2 cards), a
-// length-L / L-pt run, a 4-or-5-pt flush, a 1-pt nobs. An atom's identity is its
-// type (+ run length) and its order-independent card set; matching at this level
-// means a bundled "double run of 3" and its hand-decomposed pair + two runs are
-// interchangeable. Each atom is { kind, cards, points, runLen? }.
-
-// pairSubsets turns k same-rank cards into all C(k,2) atomic pairs. Used for the
-// pair family (pair/pair royal/double pair royal) and for the duplicated ranks a
-// run combo absorbs.
-function pairSubsets(cards) {
-    const atoms = [];
-    for (let i = 0; i < cards.length; i++)
-        for (let j = i + 1; j < cards.length; j++)
-            atoms.push({ kind: 'pair', cards: [cards[i], cards[j]], points: 2 });
-    return atoms;
-}
-
-// runAtoms decomposes a bundled run (single or multiple) into its atomic parts.
-// Group the cards by rank: the distinct ranks form the consecutive base run, and
-// the cartesian product taking one card per rank yields exactly `multiplicity`
-// atomic runs of that length. Any rank appearing more than once also contributes
-// its C(k,2) atomic pairs. (e.g. 3,4,5,5 → runs 3-4-5a & 3-4-5b + pair 5a-5b.)
-// The SAME logic serves the engine's `run` combos and the user's run-family
-// declarations; if the selected cards can't form the claimed run the generated
-// atoms simply won't match the engine pool and the declaration grades wrong.
-function runAtoms(cards) {
-    const byRank = new Map();
-    for (const c of cards) {
-        if (!byRank.has(c.rank)) byRank.set(c.rank, []);
-        byRank.get(c.rank).push(c);
-    }
-    const ranks = [...byRank.keys()].sort((a, b) => a - b);
-    const runLen = ranks.length;
-    let runs = [[]];
-    for (const rank of ranks) {
-        const next = [];
-        for (const combo of runs)
-            for (const card of byRank.get(rank)) next.push([...combo, card]);
-        runs = next;
-    }
-    const atoms = runs.map((rc) => ({ kind: 'run', runLen, cards: rc, points: runLen }));
-    for (const rank of ranks) {
-        const group = byRank.get(rank);
-        if (group.length > 1) atoms.push(...pairSubsets(group));
-    }
-    return atoms;
-}
-
-// atomsFromEngineCombo expands one engine combo into atoms. fifteen/flush/nobs
-// are atomic already; pair combos (pair/pair-royal/double-pair-royal, points
-// k*(k-1)) fan out to their 2-card subsets; run combos go through runAtoms.
-function atomsFromEngineCombo(c) {
-    const cards = (c.cards || []).map(parseCard);
-    switch (c.kind) {
-        case 'fifteen': return [{ kind: 'fifteen', cards, points: 2 }];
-        case 'pair': return pairSubsets(cards);
-        case 'run': return runAtoms(cards);
-        case 'flush': return [{ kind: 'flush', cards, points: cards.length }];
-        case 'nobs': return [{ kind: 'nobs', cards, points: 1 }];
-        default: return [{ kind: c.kind, cards, points: c.points }];
-    }
-}
-
-// atomsFromDeclaration expands a user declaration into atoms by its kind family,
-// reusing the very same generators as the engine side so the two pools line up.
-function atomsFromDeclaration(entry, cards) {
-    switch (entry.family) {
-        case 'fifteen': return [{ kind: 'fifteen', cards, points: 2 }];
-        case 'pair': return pairSubsets(cards);
-        case 'run': return runAtoms(cards);
-        case 'flush': return [{ kind: 'flush', cards, points: cards.length }];
-        case 'nobs': return [{ kind: 'nobs', cards, points: 1 }];
-        default: return [];
-    }
-}
-
-// atomsMatch compares a pool atom against a wanted atom by type + card set (runs
-// also by length). nobs stays lenient: any engine nobs satisfies a nobs atom,
-// regardless of which card(s) the user picked.
-function atomsMatch(pool, want) {
-    if (want.kind === 'nobs') return pool.kind === 'nobs';
-    if (pool.kind !== want.kind) return false;
-    if (want.kind === 'run' && pool.runLen !== want.runLen) return false;
-    return cardKey(pool.cards) === cardKey(want.cards);
-}
+// The atomic decomposition + matching + grade() live in scoringQuizGrading.js
+// (pure, DOM-free, unit-tested); atomsFromEngineCombo and grade are imported at
+// the top. This module only builds the state grade() consumes and renders it.
 
 // declaredTotal is the score the user has entered so far: the running count of the
 // last combo declared, or 0 with none (a legitimate claim — some hands score
@@ -322,84 +213,21 @@ async function submit() {
     }
 
     state.busy = false;
-    state.result = grade(data.combos || [], data.total || 0);
+    // grade() is pure: resolve each declaration's card indices into the actual
+    // cards and hand it the engine combos + total (see scoringQuizGrading.js).
+    state.result = grade(resolvedDeclarations(), data.combos || [], data.total || 0);
     render();
 }
 
-// grade reduces the engine's combos AND the user's declarations to atomic
-// components and matches them in that common alphabet, then grades each line on
-// BOTH its cards and the running count the user typed.
-//
-// Cards (cardsOk): a declaration's cards are right iff EVERY one of its atoms is
-// found unconsumed in the engine pool (which it then consumes); otherwise the
-// cards are wrong and the declaration consumes nothing. This is what lets a double
-// run be declared bundled or fully decomposed and grade the same; nobs atoms match
-// leniently. Leftover engine atoms become the "missed" list, each its own line.
-//
-// Running count: the expected running count at a line is the cumulative of the
-// REAL points over the sequence of CORRECTLY-CARDED declarations, in order. A
-// card-wrong line breaks the chain — it contributes 0 and is skipped — so a later
-// correct line's expected count is the running total of the correct-carded points
-// only. A line is fully correct (green ✓) iff its cards match AND the count the
-// user typed equals that expected running count. This keeps the per-line marks and
-// the overall verdict logically consistent: since the last correct line's running
-// count is exactly the sum of all correct-carded points, "every line green + none
-// missed" necessarily equals the engine total, so all-green ⇒ Correct always and a
-// separate declTotal===engineTotal check is redundant.
-function grade(rawCombos, engineTotal) {
-    const pool = [];
-    for (const c of rawCombos)
-        for (const a of atomsFromEngineCombo(c)) pool.push({ ...a, used: false });
-
-    // First pass — cards only: decide each declaration's cardsOk and its real point
-    // value, independent of the running count the user typed.
-    const declared = state.declarations.map((d) => {
-        const entry = kindById(d.kindId);
-        const cards = d.idxs.map((idx) => state.cards[idx]);
-        const want = atomsFromDeclaration(entry, cards);
-        // Find a distinct unconsumed pool atom for each wanted atom; only commit
-        // (consume) if ALL are found, so a card-wrong declaration leaves the pool intact.
-        const found = [];
-        let cardsOk = want.length > 0;
-        for (const a of want) {
-            const m = pool.find((p) => !p.used && !found.includes(p) && atomsMatch(p, a));
-            if (!m) { cardsOk = false; break; }
-            found.push(m);
-        }
-        if (cardsOk) for (const m of found) m.used = true;
-        const points = cardsOk ? want.reduce((s, a) => s + a.points, 0) : 0;
-        return { kindId: d.kindId, cards, count: d.count, cardsOk, points };
-    });
-
-    const missed = pool.filter((p) => !p.used)
-        .map((p) => ({ kind: p.kind, cards: p.cards, points: p.points, runLen: p.runLen }));
-
-    // Second pass — running count: walk the declarations in order, accumulating the
-    // real points of correctly-carded lines only. Each correct-carded line records
-    // the running count it SHOULD read (correctCount); a line is green only if the
-    // count the user typed matches it. Card-wrong lines don't advance the chain and
-    // carry no expected running count.
-    let run = 0;
-    for (const d of declared) {
-        if (d.cardsOk) {
-            run += d.points;
-            d.correctCount = run;            // the running count this line should read
-            d.correct = d.count === run;     // green only when cards AND count agree
-        } else {
-            d.correctCount = null;
-            d.correct = false;
-        }
-    }
-    // Missed atoms continue the same running count so the teaching progression ends
-    // at the engine total.
-    for (const m of missed) { run += m.points; m.correctCount = run; }
-
-    // Overall verdict: every declared line green (cards right AND count right) and
-    // nothing missed. All-green + none-missed ⇒ the last line's running count equals
-    // the engine total, so "all lines ✓ yet Not quite" is impossible by construction.
-    const correct = declared.every((d) => d.correct) && missed.length === 0;
-
-    return { correct, total: engineTotal, declared, missed };
+// resolvedDeclarations maps the view's index-based declarations into the plain
+// { kindId, cards, count } shape the pure grade() consumes, so grading never
+// reaches back into view state.
+function resolvedDeclarations() {
+    return state.declarations.map((d) => ({
+        kindId: d.kindId,
+        cards: d.idxs.map((idx) => state.cards[idx]),
+        count: d.count,
+    }));
 }
 
 // buildAnswer turns the engine's combos into the Show-me breakdown: every combo
