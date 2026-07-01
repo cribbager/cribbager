@@ -309,11 +309,18 @@ button:active { transform: translateY(1px); }
 /* homepage (index.html) — a light page, no game engine */
 .home-card { max-width: 440px; margin: 8vh auto 0; background: var(--panel); border: 1px solid var(--line);
   border-radius: var(--radius-lg); padding: 26px 30px 30px; box-shadow: var(--shadow); }
-.home-title { margin: 0 0 14px; font-size: 26px; font-weight: 800; letter-spacing: 0.2px; }
+.home-title { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: 0.2px; }
+.home-tagline { margin: 0 0 14px; color: var(--muted); font-size: 14px; font-weight: 600; line-height: 1.4; }
 .home-input { display: block; width: 100%; box-sizing: border-box; padding: 9px 12px; margin: 8px 0;
   border: 1px solid var(--line); border-radius: 10px; font: inherit; background: var(--color-surface-input); }
 .home-actions { display: flex; gap: 8px; margin: 12px 0 18px; }
 .home-actions button { flex: 1; }
+/* Each start action is a two-line button: a title over a compact helper line so a
+   newcomer can tell the three options apart. */
+.home-action { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  text-align: center; padding: 10px 12px; line-height: 1.25; }
+.home-action-title { font-weight: 700; }
+.home-action-help { font-size: 11px; font-weight: 600; opacity: 0.85; }
 .home-join { display: flex; gap: 8px; align-items: center; }
 .home-join .home-input { margin: 0; flex: 1; }
 .home-games { margin-top: 22px; }
@@ -443,6 +450,25 @@ button:active { transform: translateY(1px); }
   .home-actions button { flex: 1 1 140px; }
   .site-header-inner { padding: var(--space-2) var(--space-3); }
   .site-header-right .btn { padding: var(--space-2) var(--space-3); }
+
+  /* Mobile quick-win (NU2): stop the pegging/show rows clipping on a ~375px
+     phone. The felt/table contain any spill, and the horizontal card rows
+     scroll instead of pushing cards off-screen. Interim fix ahead of the full
+     responsive redesign (U3). */
+  .felt { padding: 12px 10px; overflow-x: hidden; }
+  .table-inner { overflow-x: hidden; }
+  .seat { padding: 0 4px; }
+  /* Played-card and show rows: let their contents scroll rather than clip. */
+  .pegged, .show-row { overflow-x: auto; overflow-y: hidden; }
+  /* Tighten overlap and the deck gap so a full row fits more often before it
+     needs to scroll. */
+  .pegged { gap: 8px; }
+  .pegged > .card:not(:first-child) { margin-left: -22px; }
+  .deck { gap: 10px; }
+  /* The show total is oversized for a narrow column; shrink it and its insets. */
+  .show-score { font-size: 28px; margin-left: 10px; }
+  .show-row .show-starter { margin-left: 10px; }
+  .show-breakdown { gap: 6px 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .card, .peg { transition: none !important; }
