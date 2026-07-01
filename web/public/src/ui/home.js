@@ -168,16 +168,19 @@ const lobbySection = h('div', { class: 'panel home-lobby' },
 // hide the redundant per-game name field when signed in. Completed-game history
 // (the old "Your games" list) now lives on the profile page (/profile.html).
 
+// Right column: the play/create controls, stacked vertically.
+const playSection = h('div', { class: 'panel home-play' },
+    h('p', { class: 'home-tagline' }, 'Play and learn cribbage online — vs the computer or a friend.'),
+    nameInput,
+    h('div', { class: 'home-actions' }, playBot, createGame, challenge),
+    h('div', { class: 'home-join' }, joinInput, joinBtn),
+    gamesSection,
+);
+
+// Two columns: the lobby of open games on the left, the play/create controls on
+// the right. No page heading — the "Cribbager" wordmark already lives in the header.
 document.getElementById('home').append(
-    h('div', { class: 'home-card' },
-        h('h1', { class: 'home-title' }, 'Cribbager'),
-        h('p', { class: 'home-tagline' }, 'Play and learn cribbage online — vs the computer or a friend.'),
-        nameInput,
-        h('div', { class: 'home-actions' }, playBot, createGame, challenge),
-        h('div', { class: 'home-join' }, joinInput, joinBtn),
-        gamesSection,
-    ),
-    lobbySection,
+    h('div', { class: 'home-columns' }, lobbySection, playSection),
 );
 renderGames();
 renderLobby([]); // friendly empty state until the first fetch resolves
