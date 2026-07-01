@@ -10,7 +10,7 @@
 
 import { mountHeader } from './header.js';
 import { cardFace } from './cardFace.js';
-import { parseCard, cardCode, cardsEqual, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
+import { parseCard, cardCode, cardsEqual, sortCards, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
 
 // tiny DOM helper (matches the on*-listener + text-node style used elsewhere)
 function h(tag, attrs = {}, ...kids) {
@@ -64,7 +64,11 @@ const state = {
 };
 
 function newDeal() {
-    state.hand = dealHand();
+    // Sort the dealt six once, up front, into the app-wide display order (rank then
+    // suit). Selection keys off indices into state.hand, so sorting here — BEFORE any
+    // selection — keeps the click-to-throw indices consistent with what's shown; we
+    // never re-sort a display copy that would desync from the selection indices.
+    state.hand = sortCards(dealHand());
     state.selected = new Set();
     state.result = null;
     state.error = null;
@@ -213,17 +217,17 @@ function renderVerdict() {
 
     kids.push(h('div', { class: 'pr-line' },
         h('span', { class: 'pr-line-label' }, 'You threw '),
-        ...cardLabels(choice.hold.throw.map(parseCard)),
+        ...cardLabels(sortCards(choice.hold.throw.map(parseCard))),
         h('span', { class: 'pr-line-sep' }, ' — kept '),
-        ...cardLabels(choice.hold.keep.map(parseCard)),
+        ...cardLabels(sortCards(choice.hold.keep.map(parseCard))),
         h('span', { class: 'pr-ev' }, ` (EV ${evFmt(choice.hold.ev)})`)));
 
     if (!optimal) {
         kids.push(h('div', { class: 'pr-line pr-line-engine' },
             h('span', { class: 'pr-line-label' }, 'Best: throw '),
-            ...cardLabels(best.throw.map(parseCard)),
+            ...cardLabels(sortCards(best.throw.map(parseCard))),
             h('span', { class: 'pr-line-sep' }, ' — keep '),
-            ...cardLabels(best.keep.map(parseCard)),
+            ...cardLabels(sortCards(best.keep.map(parseCard))),
             h('span', { class: 'pr-ev' }, ` (EV ${evFmt(best.ev)})`)));
     }
 
@@ -233,7 +237,7 @@ function renderVerdict() {
     // Full ranked table, collapsed by default.
     const rows = holds.map((hld, i) => h('tr', { class: 'pr-row' + (choice.rank === i + 1 ? ' is-you' : '') },
         h('td', { class: 'pr-td-rank' }, String(i + 1)),
-        h('td', {}, ...cardLabels(hld.throw.map(parseCard))),
+        h('td', {}, ...cardLabels(sortCards(hld.throw.map(parseCard)))),
         h('td', { class: 'pr-td-ev' }, evFmt(hld.ev)),
         h('td', { class: 'pr-td-tag' }, choice.rank === i + 1 ? 'you' : (i === 0 ? 'best' : ''))));
     const table = h('details', { class: 'pr-details' },

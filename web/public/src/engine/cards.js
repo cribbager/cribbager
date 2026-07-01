@@ -12,6 +12,17 @@ export function cardsEqual(a, b) {
     return a.rank === b.rank && a.suit === b.suit;
 }
 
+/**
+ * Return a NEW array of cards sorted by rank ascending (ace low: A,2,…,10,J,Q,K)
+ * then by suit (the SUIT_SYMBOLS order: ♣,♦,♥,♠). This is the app-wide display
+ * order for any hand/counted/crib cards shown to the user — the single shared sort
+ * so the various views can't drift. The input is never mutated (game/state arrays
+ * are often index-sensitive, so callers sort a display copy).
+ */
+export function sortCards(cards) {
+    return [...cards].sort((a, b) => a.rank - b.rank || a.suit - b.suit);
+}
+
 const SUIT_LETTERS = { c: 0, d: 1, h: 2, s: 3 };
 const NAMED_RANKS = { a: 1, t: 10, j: 11, q: 12, k: 13 };
 

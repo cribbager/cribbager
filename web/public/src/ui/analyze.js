@@ -11,7 +11,7 @@
 
 import { mountHeader } from './header.js';
 import { cardFace } from './cardFace.js';
-import { parseCard, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
+import { parseCard, sortCards, RANK_LABELS, SUIT_SYMBOLS } from '../engine/cards.js';
 
 // tiny DOM helper (matches the on*-listener + text-node style used elsewhere)
 function h(tag, attrs = {}, ...kids) {
@@ -65,7 +65,7 @@ function renderHand(d, i) {
     const isThrown = (c) => thrown.some((t) => t.rank === c.rank && t.suit === c.suit);
 
     const six = h('div', { class: 'an-hand-cards' },
-        hand.map((c) => cardFace(c, { small: true, extra: isThrown(c) ? 'an-thrown' : 'an-kept' })));
+        sortCards(hand).map((c) => cardFace(c, { small: true, extra: isThrown(c) ? 'an-thrown' : 'an-kept' })));
 
     const cribTag = h('span', { class: 'an-crib' }, d.dealer ? 'Your crib' : "Opponent's crib");
     const badge = d.optimal
@@ -79,18 +79,18 @@ function renderHand(d, i) {
 
     const yours = h('div', { class: 'an-line' },
         h('span', { class: 'an-line-label' }, 'You threw '),
-        ...cardLabels(thrown),
+        ...cardLabels(sortCards(thrown)),
         h('span', { class: 'an-line-sep' }, ' — kept '),
-        ...cardLabels((d.keep || []).map(parseCard)),
+        ...cardLabels(sortCards((d.keep || []).map(parseCard))),
         h('span', { class: 'an-ev' }, ' (EV ' + evFmt(d.keep_ev) + ')'));
 
     const lines = [yours];
     if (!d.optimal) {
         lines.push(h('div', { class: 'an-line an-line-engine' },
             h('span', { class: 'an-line-label' }, 'Engine: throw '),
-            ...cardLabels((d.best_throw || []).map(parseCard)),
+            ...cardLabels(sortCards((d.best_throw || []).map(parseCard))),
             h('span', { class: 'an-line-sep' }, ' — keep '),
-            ...cardLabels((d.best_keep || []).map(parseCard)),
+            ...cardLabels(sortCards((d.best_keep || []).map(parseCard))),
             h('span', { class: 'an-ev' }, ' (EV ' + evFmt(d.best_ev) + ')')));
     }
 

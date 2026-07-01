@@ -6,7 +6,7 @@
 // every counted element. The opponent is a silent veteran; the only "voice" is
 // functional cribbage language announced as each player plays/counts.
 import { createBoard, straightBoard } from '../board/board.js';
-import { cardsEqual, parseCard } from '../engine/cards.js';
+import { cardsEqual, parseCard, sortCards } from '../engine/cards.js';
 import { cardFace } from './cardFace.js';
 import { GameClient } from '../net/client.js';
 import { mountHeader } from './header.js';
@@ -55,7 +55,6 @@ const fresh = () => ({
     show: null,
 });
 let state = fresh();
-const sortHand = (cards) => [...cards].sort((a, b) => a.rank - b.rank || a.suit - b.suit);
 // ---------- scaffold ----------
 const app = document.getElementById('app');
 const elFelt = h('div', { class: 'felt' });
@@ -221,7 +220,7 @@ function stageEl() {
 // The show: top row = the counted hand + starter + big total; second row = the breakdown.
 function showRows() {
     const sh = state.show;
-    const cards = sh.hand.map((c) => cardEl(c));
+    const cards = sortCards(sh.hand).map((c) => cardEl(c));
     const starterEl = cardEl(sh.starter, { cls: 'show-starter' });
     const lead = sh.isCrib ? [h('span', { class: 'crib-tag' }, 'crib')] : [];
     const showRow = h('div', { class: 'show-row' }, ...lead, ...cards, starterEl, h('div', { class: 'show-score' }, String(sh.score.total)));
@@ -247,7 +246,7 @@ function render() {
     const oppSeat = h('div', { class: 'seat opp' }, ...oppRows);
     // Your hand (interactive).
     const youHand = h('div', { class: 'hand' });
-    for (const card of sortHand(state.humanHand)) {
+    for (const card of sortCards(state.humanHand)) {
         if (state.discarding) {
             const sel = state.selected.some((c) => cardsEqual(c, card));
             youHand.append(cardEl(card, { cls: 'selectable' + (sel ? ' selected' : ''), onClick: () => toggleSelect(card) }));
