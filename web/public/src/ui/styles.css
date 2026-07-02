@@ -346,31 +346,20 @@ button:active { transform: translateY(1px); }
 .card-modal h2 { margin: 0 0 6px; }
 .card-modal p { color: var(--muted); margin: 6px 0 18px; font-weight: 600; }
 
-/* homepage (index.html) — a light page, no game engine. Two columns: the lobby of
-   open games on the left, the play/create controls on the right. No page heading —
-   the "Cribbager" wordmark lives in the site header. */
-.home-columns { display: flex; gap: var(--space-4); align-items: flex-start;
-  max-width: 900px; margin: 6vh auto 0; }
-.home-columns > .home-lobby, .home-columns > .home-play { flex: 1 1 0; min-width: 0; margin: 0; }
-.home-play { padding: var(--space-5); }
+/* homepage (index.html) — a light page, no game engine. A single centered card
+   with the two ways to start and any games in progress. No page heading — the
+   "Cribbager" wordmark lives in the site header. */
+.home-play { max-width: 440px; margin: 6vh auto 0; padding: var(--space-5); }
 /* Single centered card — still used by the password reset page (reset.js). */
 .home-card { max-width: 440px; margin: 8vh auto 0; background: var(--panel); border: 1px solid var(--line);
   border-radius: var(--radius-lg); padding: 26px 30px 30px; box-shadow: var(--shadow); }
 .home-title { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: 0.2px; }
-.home-tagline { margin: 0 0 14px; color: var(--muted); font-size: 14px; font-weight: 600; line-height: 1.4; }
 .home-input { display: block; width: 100%; box-sizing: border-box; padding: 9px 12px; margin: 8px 0;
   border: 1px solid var(--line); border-radius: 10px; font: inherit; background: var(--color-surface-input); }
 /* Start actions stack vertically (full-width buttons). */
-.home-actions { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 18px; }
+.home-actions { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; }
 .home-actions button { width: 100%; }
-/* Each start action is a two-line button: a title over a compact helper line so a
-   newcomer can tell the three options apart. */
-.home-action { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  text-align: center; padding: 10px 12px; line-height: 1.25; }
-.home-action-title { font-weight: 700; }
-.home-action-help { font-size: 11px; font-weight: 600; opacity: 0.85; }
-.home-join { display: flex; gap: 8px; align-items: center; }
-.home-join .home-input { margin: 0; flex: 1; }
+.home-action { text-align: center; padding: 12px; font-weight: 700; }
 .home-games { margin-top: 22px; }
 .home-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
 .home-game-row { display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -379,20 +368,6 @@ button:active { transform: translateY(1px); }
 .home-resume:hover { text-decoration: underline; }
 .home-forget { padding: 4px 11px; font-size: 13px; }
 .gameid { font-family: var(--font-mono); font-size: 12px; color: var(--ink); word-break: break-all; }
-
-/* Lobby — public open games waiting for a joiner. A .panel below the home card,
-   matched to its width; rows reuse the same spacing/divider feel as the
-   in-progress list. */
-.home-lobby { padding: var(--space-5); }
-.home-lobby-list { margin-top: var(--space-1); }
-.home-lobby-empty { color: var(--muted); font-weight: 600; padding: var(--space-2) 0; }
-.home-lobby-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
-  padding: 9px 0; border-top: 1px solid var(--line); }
-.home-lobby-row:first-child { border-top: 0; }
-.home-lobby-meta { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-.home-lobby-host { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-lobby-age { color: var(--muted); font-size: 12px; flex: none; }
-.home-lobby-join { padding: 6px 16px; font-size: 13px; }
 
 /* Completed-game history ("Your games"), shown when signed in. */
 .home-history { margin-top: 22px; }
@@ -488,10 +463,8 @@ button:active { transform: translateY(1px); }
   :root { --card-w: 52px; --card-h: 73px; }
   .card .pip { font-size: 26px; }
   .card .corner { font-size: 14px; }
-  /* homepage: stack the two columns on a phone, play/create controls first (the
-     lobby drops below), and give them breathing room near the edges. */
-  .home-columns { flex-direction: column; margin-top: 4vh; }
-  .home-play { order: -1; }
+  /* homepage: tighten the card's top margin on a phone. */
+  .home-play { margin-top: 4vh; }
   .home-card { margin-top: 4vh; padding: 22px 18px 24px; } /* reset page card on phones */
   .home-auth-form { width: 100%; }
   .home-auth-form .home-input { flex-basis: 100%; min-width: 0; }

@@ -23,7 +23,7 @@ export class GameClient {
   }
 
   create(opts) { return this.request('POST', '/games', null, opts); }
-  join(gameId, name) { return this.request('POST', `/games/${gameId}/join`, null, { name }); }
+  join(gameId) { return this.request('POST', `/games/${gameId}/join`, null, {}); }
   snapshot(gameId, token) { return this.request('GET', `/games/${gameId}`, token); }
   act(gameId, token, action) { return this.request('POST', `/games/${gameId}/actions`, token, action); }
   abandon(gameId, token) { return this.request('POST', `/games/${gameId}/abandon`, token); }

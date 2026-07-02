@@ -143,7 +143,7 @@ export function mountHeader({ onAuthChange } = {}) {
     // Main nav, available to everyone (no auth): two menus, Play and Learn. The
     // top label is a real link (Play → home, Learn → How to Play) so it works on
     // touch, and hovering/focusing reveals the dropdown of specific options
-    // (CSS-driven — see .site-nav-menu). Play mirrors the home page's three start
+    // (CSS-driven — see .site-nav-menu). Play mirrors the home page's two start
     // options; Learn gathers the learning surfaces.
     const navMenu = (label, topHref, items) => {
         const top = h('a', { class: 'site-nav-top', href: topHref }, label);
@@ -153,9 +153,8 @@ export function mountHeader({ onAuthChange } = {}) {
     };
     const nav = h('nav', { class: 'site-nav', 'aria-label': 'Main' },
         navMenu('Play', '/', [
-            { label: 'Create a new game', href: '/game.html?new=open&public=1' },
-            { label: 'Challenge a friend', href: '/game.html?new=open' },
-            { label: 'Play against the computer', href: '/game.html?new=bot' },
+            { label: 'Play the Bot', href: '/game.html?new=bot' },
+            { label: 'Challenge a Friend', href: '/game.html?new=open' },
         ]),
         navMenu('Learn', '/learn.html', [
             { label: 'How to Play', href: '/learn.html' },

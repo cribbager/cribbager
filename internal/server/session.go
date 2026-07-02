@@ -164,7 +164,11 @@ func (s *session) roster() Delta {
 	players := make([]PlayerInfo, 2)
 	for seat := game.Seat(0); seat < 2; seat++ {
 		connected := s.subCount[seat] > 0 || s.bots[seat] != nil
-		players[seat] = PlayerInfo{Seat: seat, Name: s.names[seat], Connected: connected, Left: s.left[seat]}
+		name := s.names[seat]
+		if name == "" && (s.tokens[seat] != "" || s.bots[seat] != nil) {
+			name = "Anonymous" // a seated guest with no display name
+		}
+		players[seat] = PlayerInfo{Seat: seat, Name: name, Connected: connected, Left: s.left[seat]}
 	}
 	return Delta{Type: "players", Players: players}
 }
