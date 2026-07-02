@@ -140,11 +140,12 @@ export function mountHeader({ onAuthChange } = {}) {
     const notify = () => { if (onAuthChange) onAuthChange(currentUser); };
 
     const right = h('div', { class: 'site-header-right' });
-    // Main nav, available to everyone (no auth): two menus, Play and Learn. The
-    // top label is a real link (Play → home, Learn → How to Play) so it works on
-    // touch, and hovering/focusing reveals the dropdown of specific options
-    // (CSS-driven — see .site-nav-menu). Play mirrors the home page's two start
-    // options; Learn gathers the learning surfaces.
+    // Main nav, available to everyone (no auth): three menus — Play, Learn, and
+    // Tools. The top label is a real link (Play → home, Learn → How to Play,
+    // Tools → the Discard Evaluator) so it works on touch, and hovering/focusing
+    // reveals the dropdown of specific options (CSS-driven — see .site-nav-menu).
+    // Play mirrors the home page's two start options; Learn gathers the learning
+    // surfaces; Tools gathers the standalone calculators.
     const navMenu = (label, topHref, items) => {
         const top = h('a', { class: 'site-nav-top', href: topHref }, label);
         const dropdown = h('div', { class: 'site-nav-dropdown', role: 'menu' },
@@ -160,6 +161,9 @@ export function mountHeader({ onAuthChange } = {}) {
             { label: 'How to Play', href: '/learn.html' },
             { label: 'Discard Practice', href: '/practice.html' },
             { label: 'Hand Counting', href: '/practice-scoring.html' },
+        ]),
+        navMenu('Tools', '/discard-evaluator.html', [
+            { label: 'Discard Evaluator', href: '/discard-evaluator.html' },
         ]),
     );
     const inner = h('div', { class: 'site-header-inner' },

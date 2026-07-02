@@ -15,36 +15,65 @@ import (
 
 // discardEvalRequest is the body of POST /tools/discard-eval: the six dealt cards
 // and whether the crib is the caller's (dealer) or the opponent's, which flips the
-// sign of the crib term and therefore the ranking.
+// sign of the crib term and therefore the ranking. The scores are optional
+// (pointers so 0 is distinguishable from absent) and must come as a pair: with
+// them the response adds each hold's win probability and the game-situation
+// block, ranked by eval.RankDiscardsWin instead of eval.RankDiscards.
 type discardEvalRequest struct {
-	Hand   []cribbage.Card `json:"hand"`
-	Dealer bool            `json:"dealer"`
+	Hand     []cribbage.Card `json:"hand"`
+	Dealer   bool            `json:"dealer"`
+	MyScore  *int            `json:"my_score"`
+	OppScore *int            `json:"opp_score"`
 }
 
 // rankedHold is one of the 15 possible holds with its expected-value breakdown,
 // mirroring eval.RankedDiscard on the wire. EV is what the discard maximizes:
-// the kept four's expected show value plus the signed expected crib value.
+// the kept four's expected show value plus the signed expected crib value. Win is
+// this hold's win probability — meaningful only when the request carried scores
+// AND the situation is in reach of 121 (situation.endgame true); otherwise it is
+// a true 0, kept on the wire (never omitempty) so clients needn't special-case a
+// missing field (see TestDeltaNumericFieldsAlwaysPresent for the convention).
 type rankedHold struct {
 	Throw  [2]cribbage.Card `json:"throw"`   // the two cards sent to the crib
 	Keep   [4]cribbage.Card `json:"keep"`    // the four kept
 	HandEV float64          `json:"hand_ev"` // expected show value of the kept four
 	CribEV float64          `json:"crib_ev"` // expected crib value, signed (+ yours, − theirs)
 	EV     float64          `json:"ev"`      // hand_ev + crib_ev — the ranked score
+	Win    float64          `json:"win"`     // P(win) with this hold (0 unless endgame)
+}
+
+// discardSituation describes the game position the discard is evaluated in, for
+// requests that carry scores. Endgame reports whether the win-probability
+// objective is active (someone is in reach of 121); when false every hold's win
+// is 0 by construction and the ranking is the points-EV order — the client must
+// present that state, not a column of zeros.
+type discardSituation struct {
+	MyScore  int     `json:"my_score"`
+	OppScore int     `json:"opp_score"`
+	MyNeed   int     `json:"my_need"`  // points to 121 for the caller
+	OppNeed  int     `json:"opp_need"` // points to 121 for the opponent
+	WinProb  float64 `json:"win_prob"` // P(caller wins) at these scores, before the deal
+	Endgame  bool    `json:"endgame"`  // win objective active (someone in reach of 121)
 }
 
 // discardEvalResponse echoes the validated input and returns all 15 holds ranked
 // best-first, so the client can render the ranking and locate the user's pick.
+// The ranking objective follows the request: points EV without scores, win
+// probability (falling back to points EV far from the end) with them. Situation
+// is present exactly when the request carried scores.
 type discardEvalResponse struct {
-	Hand   []cribbage.Card `json:"hand"`
-	Dealer bool            `json:"dealer"`
-	Holds  []rankedHold    `json:"holds"`
+	Hand      []cribbage.Card   `json:"hand"`
+	Dealer    bool              `json:"dealer"`
+	Holds     []rankedHold      `json:"holds"`
+	Situation *discardSituation `json:"situation,omitempty"`
 }
 
 // handleDiscardEval grades a discard: it ranks all 15 holds of a supplied six-card
-// hand by the same crib-aware EV the bot uses (eval.RankDiscards — the single
-// source of truth, no scoring duplicated here). It is stateless and unauthenticated:
-// the caller supplies the whole hand, nothing is read or written. Path:
-// POST /tools/discard-eval.
+// hand by the same crib-aware evaluation the bot uses (eval.RankDiscards, or
+// eval.RankDiscardsWin when the request carries scores — the single source of
+// truth either way, no scoring duplicated here). It is stateless and
+// unauthenticated: the caller supplies the whole hand, nothing is read or
+// written. Path: POST /tools/discard-eval.
 func (s *Server) handleDiscardEval(w http.ResponseWriter, r *http.Request) {
 	var req discardEvalRequest
 	if !decodeJSON(w, r, &req) {
@@ -62,10 +91,37 @@ func (s *Server) handleDiscardEval(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[c] = true
 	}
+	if (req.MyScore == nil) != (req.OppScore == nil) {
+		writeErr(w, http.StatusBadRequest, "my_score and opp_score must be given together")
+		return
+	}
+	if req.MyScore != nil {
+		for _, v := range []int{*req.MyScore, *req.OppScore} {
+			if v < 0 || v > 120 {
+				writeErr(w, http.StatusBadRequest, "scores must be between 0 and 120")
+				return
+			}
+		}
+	}
 
 	var h [6]cribbage.Card
 	copy(h[:], req.Hand)
-	ranked := eval.RankDiscards(h, req.Dealer)
+	var ranked []eval.RankedDiscard
+	var situation *discardSituation
+	if req.MyScore != nil {
+		my, opp := *req.MyScore, *req.OppScore
+		ranked = eval.RankDiscardsWin(h, req.Dealer, my, opp)
+		situation = &discardSituation{
+			MyScore:  my,
+			OppScore: opp,
+			MyNeed:   121 - my,
+			OppNeed:  121 - opp,
+			WinProb:  round4(eval.WinProb(my, opp, req.Dealer)),
+			Endgame:  eval.InReach(my, opp, req.Dealer),
+		}
+	} else {
+		ranked = eval.RankDiscards(h, req.Dealer)
+	}
 
 	holds := make([]rankedHold, len(ranked))
 	for i, rd := range ranked {
@@ -75,9 +131,10 @@ func (s *Server) handleDiscardEval(w http.ResponseWriter, r *http.Request) {
 			HandEV: round4(rd.EHand),
 			CribEV: round4(rd.Crib),
 			EV:     round4(rd.Score),
+			Win:    round6(rd.Win),
 		}
 	}
-	writeJSON(w, http.StatusOK, discardEvalResponse{Hand: req.Hand, Dealer: req.Dealer, Holds: holds})
+	writeJSON(w, http.StatusOK, discardEvalResponse{Hand: req.Hand, Dealer: req.Dealer, Holds: holds, Situation: situation})
 }
 
 // scoreHandRequest is the body of POST /tools/score-hand: the four cards held at

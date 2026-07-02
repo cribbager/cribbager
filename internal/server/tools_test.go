@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/cribbager/cribbager/internal/bot/eval"
@@ -78,6 +79,10 @@ func TestDiscardEvalBadInput(t *testing.T) {
 		{"duplicate", `{"hand":["5H","5H","5C","5D","JH","KH"],"dealer":true}`},
 		{"malformed card", `{"hand":["5H","5S","5C","5D","JH","ZZ"],"dealer":true}`},
 		{"not a card", `{"hand":["5H","5S","5C","5D","JH","10"],"dealer":true}`},
+		{"my_score without opp_score", `{"hand":["5H","5S","5C","5D","JH","KH"],"dealer":true,"my_score":90}`},
+		{"opp_score without my_score", `{"hand":["5H","5S","5C","5D","JH","KH"],"dealer":true,"opp_score":90}`},
+		{"score negative", `{"hand":["5H","5S","5C","5D","JH","KH"],"dealer":true,"my_score":-1,"opp_score":90}`},
+		{"score past 120", `{"hand":["5H","5S","5C","5D","JH","KH"],"dealer":true,"my_score":90,"opp_score":121}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -86,6 +91,138 @@ func TestDiscardEvalBadInput(t *testing.T) {
 				t.Fatalf("want 400, got %d (%s)", resp.StatusCode, data)
 			}
 		})
+	}
+}
+
+func intp(v int) *int { return &v }
+
+// TestDiscardEvalNoScoresShape checks the scoreless request keeps its original
+// wire shape plus the always-present win field: no situation block, and win
+// serialized as a literal 0 on every hold (numeric fields are never omitempty —
+// see TestDeltaNumericFieldsAlwaysPresent for the convention).
+func TestDiscardEvalNoScoresShape(t *testing.T) {
+	c := newTestClient(t)
+	resp, data := c.do("POST", "/tools/discard-eval", "",
+		discardEvalRequest{Hand: mustHand(t, "2C 5H 6D 9S JD QH"), Dealer: false})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d %s", resp.StatusCode, data)
+	}
+	if strings.Contains(string(data), `"situation"`) {
+		t.Fatalf("situation block present without scores: %s", data)
+	}
+	if got := strings.Count(string(data), `"win":0`); got != 15 {
+		t.Fatalf(`want "win":0 on all 15 holds, found %d (%s)`, got, data)
+	}
+}
+
+// TestDiscardEvalScoresFarFromEnd checks a scored request at 0–0: the situation
+// block reports the opening position with the endgame objective OFF, every win
+// is 0 (the win ranking defers to points EV), and all three lenses are derivable
+// from the one response — point EV is the response order, max-hand re-sorts by
+// hand_ev, and the win lens is documented as deferring rather than ranking.
+func TestDiscardEvalScoresFarFromEnd(t *testing.T) {
+	c := newTestClient(t)
+	const handStr = "2C 5H 6D 9S JD QH"
+	resp, data := c.do("POST", "/tools/discard-eval", "",
+		discardEvalRequest{Hand: mustHand(t, handStr), Dealer: true, MyScore: intp(0), OppScore: intp(0)})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d %s", resp.StatusCode, data)
+	}
+	out := decode[discardEvalResponse](t, data)
+
+	sit := out.Situation
+	if sit == nil {
+		t.Fatalf("no situation block: %s", data)
+	}
+	if sit.MyScore != 0 || sit.OppScore != 0 || sit.MyNeed != 121 || sit.OppNeed != 121 {
+		t.Fatalf("situation scores/needs wrong: %+v", sit)
+	}
+	if sit.Endgame {
+		t.Fatalf("endgame objective active at 0-0: %+v", sit)
+	}
+	if want := round4(eval.WinProb(0, 0, true)); sit.WinProb != want {
+		t.Fatalf("win_prob = %v, want %v", sit.WinProb, want)
+	}
+
+	// Far from the end the win ranking defers to points EV: the hold order must
+	// match eval.RankDiscards exactly and every win must be 0.
+	want := eval.RankDiscards(hand6(t, handStr), true)
+	for i, hld := range out.Holds {
+		if hld.Throw != want[i].Discard || hld.Keep != want[i].Keep {
+			t.Fatalf("hold %d = throw %v keep %v, want throw %v keep %v",
+				i, hld.Throw, hld.Keep, want[i].Discard, want[i].Keep)
+		}
+		if hld.Win != 0 {
+			t.Fatalf("hold %d has win %v at 0-0", i, hld.Win)
+		}
+	}
+
+	// The max-hand lens is a pure re-sort of the same rows by hand_ev: its top
+	// must carry the maximum EHand among all 15 holds.
+	bestHand := out.Holds[0].HandEV
+	for _, hld := range out.Holds {
+		if hld.HandEV > bestHand {
+			bestHand = hld.HandEV
+		}
+	}
+	wantBestHand := round4(want[0].EHand)
+	for _, rd := range want {
+		if v := round4(rd.EHand); v > wantBestHand {
+			wantBestHand = v
+		}
+	}
+	if bestHand != wantBestHand {
+		t.Fatalf("max hand_ev = %v, engine max EHand = %v", bestHand, wantBestHand)
+	}
+}
+
+// TestDiscardEvalScoresEndgame checks a scored request in reach of 121 (behind
+// 90–117, opponent deals): the endgame objective is ON, the holds arrive in
+// eval.RankDiscardsWin's win-probability order with differentiated win values,
+// and the situation block matches eval.WinProb.
+func TestDiscardEvalScoresEndgame(t *testing.T) {
+	c := newTestClient(t)
+	const handStr = "4H 5D 6S 6C TD JC"
+	resp, data := c.do("POST", "/tools/discard-eval", "",
+		discardEvalRequest{Hand: mustHand(t, handStr), Dealer: false, MyScore: intp(90), OppScore: intp(117)})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d %s", resp.StatusCode, data)
+	}
+	out := decode[discardEvalResponse](t, data)
+
+	sit := out.Situation
+	if sit == nil {
+		t.Fatalf("no situation block: %s", data)
+	}
+	if !sit.Endgame {
+		t.Fatalf("endgame objective not active at 90-117: %+v", sit)
+	}
+	if sit.MyNeed != 31 || sit.OppNeed != 4 {
+		t.Fatalf("needs = %d/%d, want 31/4", sit.MyNeed, sit.OppNeed)
+	}
+	if want := round4(eval.WinProb(90, 117, false)); sit.WinProb != want {
+		t.Fatalf("win_prob = %v, want %v", sit.WinProb, want)
+	}
+
+	// The hold order is eval.RankDiscardsWin's (win objective, EV near-ties) —
+	// the single source of truth, compared hold by hold.
+	want := eval.RankDiscardsWin(hand6(t, handStr), false, 90, 117)
+	for i, hld := range out.Holds {
+		if hld.Throw != want[i].Discard || hld.Keep != want[i].Keep {
+			t.Fatalf("hold %d = throw %v keep %v, want throw %v keep %v",
+				i, hld.Throw, hld.Keep, want[i].Discard, want[i].Keep)
+		}
+		if hld.Win != round6(want[i].Win) {
+			t.Fatalf("hold %d win = %v, want %v", i, hld.Win, round6(want[i].Win))
+		}
+	}
+	// The win lens must actually differentiate here: a positive best and a real
+	// spread across the 15 holds (otherwise the lens is indistinguishable from EV).
+	if out.Holds[0].Win <= 0 {
+		t.Fatalf("best hold win = %v, want > 0", out.Holds[0].Win)
+	}
+	if out.Holds[0].Win == out.Holds[len(out.Holds)-1].Win {
+		t.Fatalf("win identical across all holds (%v); expected a spread", out.Holds[0].Win)
 	}
 }
 

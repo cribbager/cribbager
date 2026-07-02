@@ -700,6 +700,55 @@ button:active { transform: translateY(1px); }
 .pr-message { text-align: center; max-width: 480px; margin: var(--space-4) auto 0; }
 .pr-message-body { color: var(--color-ink-muted); margin: 0 0 var(--space-3); }
 
+/* === Discard evaluator (T1) — a standalone tools page ======================== */
+/* Reuses the discard trainer's pr- vocabulary (title/subtitle/board/segments/
+   table/chips); new here are the full-deck card picker and the situation panel. */
+#discard-evaluator { max-width: 860px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
+
+/* The picker: the whole deck, one row per suit, as small card faces (scaled via
+   the card-size vars, same trick as .sq-combo-cards). Rows scroll sideways on a
+   narrow screen rather than wrapping mid-suit. */
+.de-deck { display: flex; flex-direction: column; gap: var(--space-1); overflow-x: auto; padding-bottom: 2px; }
+.de-deck-row {
+  display: flex; gap: var(--space-1); flex-wrap: nowrap;
+  --card-scale: 0.62;
+  --card-w: calc(70px * var(--card-scale));
+  --card-h: calc(98px * var(--card-scale));
+  --card-rank-size: calc(18px * var(--card-scale));
+  --card-suit-size: calc(14px * var(--card-scale));
+  --card-pip-size: calc(32px * var(--card-scale));
+}
+.de-deck .card.de-pick { cursor: pointer; flex: none; }
+.de-deck .card.de-pick:hover { transform: translateY(-3px); }
+.de-deck .card.de-pick.selected { transform: translateY(-3px); border-color: var(--btn); box-shadow: var(--shadow-selected); }
+/* Six picked: the rest of the deck steps back until something is deselected. */
+.de-deck .card.de-pick.de-full { opacity: 0.45; }
+
+/* The chosen hand, full size, in the app-wide rank-then-suit order; empty picks
+   show as dashed placeholder slots so the row never changes size. */
+.de-chosen { min-height: var(--card-h); }
+.de-slot { width: var(--card-w); height: var(--card-h); border-radius: 9px;
+  border: 2px dashed var(--color-border-dashed); background: transparent; }
+
+.de-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-4); }
+.de-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.de-score { width: 110px; }
+
+/* Game-situation panel: the plain-language facts, then the one-line read on how
+   the position shifts the discard decision. */
+.de-situation { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
+.de-situation-line { margin: 0; color: var(--color-ink); }
+.de-situation-guidance { margin: var(--space-2) 0 0; font-weight: 700; color: var(--color-ink); }
+
+.de-result { display: flex; flex-direction: column; gap: var(--space-3); }
+.de-lenses { display: flex; align-items: center; gap: var(--space-3); }
+/* Why the win lens shows no ranking of its own far from the end. */
+.de-lens-note { margin: 0; color: var(--color-ink-muted); font-size: var(--text-sm); }
+.de-table { margin-top: 0; }
+/* The column the active lens ranks by. */
+.de-table th.is-lens, .de-table td.is-lens { background: var(--color-success-bg); }
+.de-table th { color: var(--color-ink-muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px; }
+
 /* === Hand Counting Tutorial (A6) — a standalone hand-counting practice page === */
 /* Reuses the discard trainer's pr- vocabulary (title/subtitle/board/badge);
    the show layout, the single control row, and the inline combo list are new. */
