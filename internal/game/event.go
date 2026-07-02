@@ -18,6 +18,14 @@ type CutForDeal struct {
 	Dealer Seat
 }
 
+// Handicap seeds a new game with preset scores instead of starting from 0–0.
+// It exists for positional fixtures and simulation (see Options.Start), not live
+// play, and is an event so the fold/restore invariants hold. When present it is
+// the first event, in place of CutForDeal.
+type Handicap struct {
+	Scores [2]int
+}
+
 // HandDealt starts a hand: the dealer and each seat's six cards.
 type HandDealt struct {
 	Dealer Seat
@@ -85,6 +93,7 @@ type ShowNotCounted struct {
 }
 
 func (CutForDeal) isEvent()     {}
+func (Handicap) isEvent()       {}
 func (HandDealt) isEvent()      {}
 func (Discarded) isEvent()      {}
 func (StarterCut) isEvent()     {}

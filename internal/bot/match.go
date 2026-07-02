@@ -17,9 +17,28 @@ type Result struct {
 // illegal move — which the engine rejects — so PlayGame doubles as the legality
 // check.
 func PlayGame(a, b Bot, deck game.DeckSource) (Result, error) {
-	g := game.New(game.Options{Deck: deck})
-	bots := [2]Bot{a, b}
+	return playOn(game.New(game.Options{Deck: deck}), [2]Bot{a, b})
+}
 
+// PlayGameFrom is PlayGame starting from a preset position (scores and dealer) —
+// the runner behind positional fixtures, where score-aware play concentrates.
+func PlayGameFrom(a, b Bot, deck game.DeckSource, start game.Start) (Result, error) {
+	return playOn(game.New(game.Options{Deck: deck, Start: &start}), [2]Bot{a, b})
+}
+
+// PlayGameEvents is PlayGame but also returns the finished game's event log, for
+// per-deal statistics (DealStats) and outcome-distribution collection.
+func PlayGameEvents(a, b Bot, deck game.DeckSource) (Result, []game.Event, error) {
+	g := game.New(game.Options{Deck: deck})
+	r, err := playOn(g, [2]Bot{a, b})
+	if err != nil {
+		return Result{}, nil, err
+	}
+	return r, g.Events(), nil
+}
+
+// playOn drives an in-progress game to completion with bots[s] choosing for seat s.
+func playOn(g *game.Game, bots [2]Bot) (Result, error) {
 	for {
 		if w, ok := g.Winner(); ok {
 			return Result{Winner: w, Scores: g.Scores()}, nil

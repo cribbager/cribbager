@@ -20,6 +20,16 @@ const EngineVersion = "1"
 type Options struct {
 	Deck        DeckSource // required: source of shuffled decks
 	TargetScore int        // default 121
+	Start       *Start     // optional preset position (fixtures/simulation)
+}
+
+// Start seeds a new game at a preset position: both scores and who deals the
+// first hand. It exists for positional fixtures and simulation — score-aware
+// play is invisible at 0–0 sample sizes but concentrated near the end — not for
+// live play. Scores must be below the target.
+type Start struct {
+	Scores [2]int
+	Dealer Seat
 }
 
 // Game is a single cribbage game. It is not safe for concurrent use; the caller
@@ -39,6 +49,7 @@ type Game struct {
 	starter    cribbage.Card
 	hasStarter bool
 	discarded  [2]bool
+	cribThrown [2][2]cribbage.Card // each seat's own crib throw (valid once discarded)
 	pile       []cribbage.Card
 	count      int
 	gone       [2]bool
@@ -58,6 +69,17 @@ func New(opts Options) *Game {
 		target = defaultTarget
 	}
 	g := &Game{target: target, src: opts.Deck, winner: -1}
+
+	if s := opts.Start; s != nil {
+		for seat, sc := range s.Scores {
+			if sc < 0 || sc >= target {
+				panic(fmt.Sprintf("game: Start score %d for seat %d outside [0, %d)", sc, seat, target))
+			}
+		}
+		g.emit(Handicap{Scores: s.Scores})
+		g.dealHand(s.Dealer)
+		return g
+	}
 
 	cuts, dealer := cutForDeal(g.src)
 	g.emit(CutForDeal{Cuts: cuts, Dealer: dealer})
@@ -347,6 +369,9 @@ func (g *Game) reduce(e Event) {
 	case CutForDeal:
 		g.dealer = e.Dealer
 
+	case Handicap:
+		g.scores = e.Scores
+
 	case HandDealt:
 		g.dealer = e.Dealer
 		g.hands[Seat0] = append([]cribbage.Card(nil), e.Hands[Seat0]...)
@@ -356,6 +381,7 @@ func (g *Game) reduce(e Event) {
 		g.starter = cribbage.Card{}
 		g.hasStarter = false
 		g.discarded = [2]bool{}
+		g.cribThrown = [2][2]cribbage.Card{}
 		g.pile = nil
 		g.count = 0
 		g.gone = [2]bool{}
@@ -366,6 +392,7 @@ func (g *Game) reduce(e Event) {
 		g.hands[e.Seat] = without(g.hands[e.Seat], e.Cards[0], e.Cards[1])
 		g.crib = append(g.crib, e.Cards[0], e.Cards[1])
 		g.discarded[e.Seat] = true
+		g.cribThrown[e.Seat] = e.Cards
 
 	case StarterCut:
 		g.starter = e.Card
