@@ -16,6 +16,13 @@ import (
 func playFullGame(t *testing.T, seed int64, check bool) *Game {
 	t.Helper()
 	g := New(Options{Deck: NewSeededDeck(seed)})
+	driveRandom(t, g, seed, check)
+	return g
+}
+
+// driveRandom plays an in-progress game to completion with random legal moves.
+func driveRandom(t *testing.T, g *Game, seed int64, check bool) {
+	t.Helper()
 	rng := rand.New(rand.NewSource(seed))
 
 	steps := 0
@@ -67,7 +74,6 @@ func playFullGame(t *testing.T, seed int64, check bool) *Game {
 			checkVisibility(t, g, seed)
 		}
 	}
-	return g
 }
 
 // --- invariants ---------------------------------------------------------------
@@ -108,14 +114,21 @@ func checkVisibility(t *testing.T, g *Game, seed int64) {
 		for _, c := range g.hands[other(s)] {
 			forbidden[c] = true
 		}
+		// The crib is hidden EXCEPT a seat's own throw, which it remembers.
 		for _, c := range g.crib {
 			forbidden[c] = true
+		}
+		if g.discarded[s] {
+			for _, c := range g.cribThrown[s] {
+				delete(forbidden, c)
+			}
 		}
 		for _, c := range g.rest {
 			forbidden[c] = true
 		}
 		v := g.View(s)
 		exposed := append([]cribbage.Card{}, v.YourHand...)
+		exposed = append(exposed, v.YourDiscards...)
 		exposed = append(exposed, v.Pile...)
 		exposed = append(exposed, v.LegalPlays...)
 		for _, c := range exposed {
@@ -125,6 +138,13 @@ func checkVisibility(t *testing.T, g *Game, seed int64) {
 		}
 		if v.OpponentCards != len(g.hands[other(s)]) {
 			t.Fatalf("seed %d: wrong opponent card count", seed)
+		}
+		if g.discarded[s] {
+			if len(v.YourDiscards) != 2 || v.YourDiscards[0] != g.cribThrown[s][0] || v.YourDiscards[1] != g.cribThrown[s][1] {
+				t.Fatalf("seed %d: view for %v has wrong YourDiscards %v", seed, s, v.YourDiscards)
+			}
+		} else if len(v.YourDiscards) != 0 {
+			t.Fatalf("seed %d: view for %v has YourDiscards before discarding", seed, s)
 		}
 	}
 }
@@ -139,6 +159,8 @@ func reconcile(t *testing.T, g *Game, seed int64) {
 		switch e := e.(type) {
 		case CutForDeal:
 			dealer = e.Dealer
+		case Handicap:
+			pts = e.Scores
 		case HandDealt:
 			dealer = e.Dealer
 		case StarterCut:
@@ -184,6 +206,7 @@ func (g *Game) snapshot() any {
 		Starter    cribbage.Card
 		HasStarter bool
 		Discarded  [2]bool
+		CribThrown [2][2]cribbage.Card
 		Pile       []cribbage.Card
 		Count      int
 		Gone       [2]bool
@@ -191,7 +214,7 @@ func (g *Game) snapshot() any {
 		Winner     int
 	}{
 		g.dealer, g.scores, g.phase, g.hands, g.played, g.crib, g.starter,
-		g.hasStarter, g.discarded, g.pile, g.count, g.gone, g.lastPlayer, g.winner,
+		g.hasStarter, g.discarded, g.cribThrown, g.pile, g.count, g.gone, g.lastPlayer, g.winner,
 	}
 }
 

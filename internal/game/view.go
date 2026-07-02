@@ -13,6 +13,7 @@ type PlayerView struct {
 	Phase          Phase
 	Scores         [2]int
 	YourHand       []cribbage.Card
+	YourDiscards   []cribbage.Card // your own crib throw this hand (you remember it); empty until you discard
 	OpponentCards  int
 	CribCards      int
 	Starter        *cribbage.Card  // nil until the cut
@@ -41,6 +42,9 @@ func (g *Game) View(seat Seat) PlayerView {
 		OpponentPlayed: append([]cribbage.Card(nil), g.played[other(seat)]...),
 		Count:          g.count,
 		Version:        g.version,
+	}
+	if g.discarded[seat] {
+		v.YourDiscards = []cribbage.Card{g.cribThrown[seat][0], g.cribThrown[seat][1]}
 	}
 	if g.hasStarter {
 		s := g.starter

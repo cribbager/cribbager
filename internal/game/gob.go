@@ -8,6 +8,7 @@ import "encoding/gob"
 // what lets a persistence layer gob-encode a GameState / Record.
 func init() {
 	gob.Register(CutForDeal{})
+	gob.Register(Handicap{})
 	gob.Register(HandDealt{})
 	gob.Register(Discarded{})
 	gob.Register(StarterCut{})

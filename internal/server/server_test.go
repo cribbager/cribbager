@@ -125,10 +125,10 @@ func TestVisibility(t *testing.T) {
 		}
 		v := decode[game.PlayerView](t, body)
 
-		// Your hand, the pile, both players' played cards (face up), and the
-		// starter are all public; collect them.
+		// Your hand, your own crib throw, the pile, both players' played cards
+		// (face up), and the starter are all visible to this seat; collect them.
 		allowed := map[cribbage.Card]bool{}
-		for _, set := range [][]cribbage.Card{v.YourHand, v.Pile, v.YourPlayed, v.OpponentPlayed} {
+		for _, set := range [][]cribbage.Card{v.YourHand, v.YourDiscards, v.Pile, v.YourPlayed, v.OpponentPlayed} {
 			for _, cd := range set {
 				allowed[cd] = true
 			}
