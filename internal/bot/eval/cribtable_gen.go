@@ -43,11 +43,14 @@ func remainingAfter(a, b cribbage.Card) []cribbage.Card {
 }
 
 // expectedCrib enumerates every completion of the crib — the starter plus the
-// opponent's two cards, drawn from the 50 cards not discarded — and averages the
-// crib score over all of them.
-func expectedCrib(a, b cribbage.Card) float64 {
+// opponent's two cards, drawn from the 50 cards not discarded — and returns the
+// mean crib score and its full distribution (histogram over 0..29) across all
+// of them. The distribution feeds the win-probability objective, which needs
+// more than the mean near the end of the game.
+func expectedCrib(a, b cribbage.Card) (float64, [30]float64) {
 	rest := remainingAfter(a, b)
 	n := len(rest)
+	var dist [30]float64
 	sum, count := 0, 0
 	for s := 0; s < n; s++ {
 		starter := rest[s]
@@ -62,11 +65,15 @@ func expectedCrib(a, b cribbage.Card) float64 {
 				crib := [4]cribbage.Card{a, b, rest[i], rest[j]}
 				t, _ := hand.Total(crib, starter, true)
 				sum += t
+				dist[t]++
 				count++
 			}
 		}
 	}
-	return float64(sum) / float64(count)
+	for i := range dist {
+		dist[i] /= float64(count)
+	}
+	return float64(sum) / float64(count), dist
 }
 
 func round4(x float64) float64 { return math.Round(x*10000) / 10000 }
@@ -83,18 +90,39 @@ func main() {
 	buf.WriteString("// two cards of ranks lo<=hi (1..13), where suited is 1 when they share a suit.\n")
 	buf.WriteString("// Pairs use only the unsuited (0) slot. See cribtable_gen.go.\n")
 	buf.WriteString("var cribEVTable = [14][14][2]float64{}\n\n")
+	buf.WriteString("// cribDistTable holds the matching exact crib score DISTRIBUTIONS (histogram\n")
+	buf.WriteString("// over scores 0..29), for the win-probability objective. Same indexing.\n")
+	buf.WriteString("var cribDistTable = [14][14][2][30]float32{}\n\n")
 	buf.WriteString("func init() {\n")
+
+	emit := func(lo, hi, suited int, v float64, dist [30]float64) {
+		fmt.Fprintf(&buf, "\tcribEVTable[%d][%d][%d] = %g\n", lo, hi, suited, round4(v))
+		fmt.Fprintf(&buf, "\tcribDistTable[%d][%d][%d] = [30]float32{", lo, hi, suited)
+		last := 0
+		for i, p := range dist {
+			if p > 0 {
+				last = i
+			}
+		}
+		for i := 0; i <= last; i++ {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			fmt.Fprintf(&buf, "%g", round4(dist[i]))
+		}
+		buf.WriteString("}\n")
+	}
 
 	for lo := 1; lo <= 13; lo++ {
 		for hi := lo; hi <= 13; hi++ {
 			if lo == hi {
-				v := round4(expectedCrib(card(lo, 0), card(lo, 1)))
-				fmt.Fprintf(&buf, "\tcribEVTable[%d][%d][0] = %g\n", lo, hi, v)
+				v, d := expectedCrib(card(lo, 0), card(lo, 1))
+				emit(lo, hi, 0, v, d)
 			} else {
-				u := round4(expectedCrib(card(lo, 0), card(hi, 1)))
-				s := round4(expectedCrib(card(lo, 0), card(hi, 0)))
-				fmt.Fprintf(&buf, "\tcribEVTable[%d][%d][0] = %g\n", lo, hi, u)
-				fmt.Fprintf(&buf, "\tcribEVTable[%d][%d][1] = %g\n", lo, hi, s)
+				u, ud := expectedCrib(card(lo, 0), card(hi, 1))
+				s, sd := expectedCrib(card(lo, 0), card(hi, 0))
+				emit(lo, hi, 0, u, ud)
+				emit(lo, hi, 1, s, sd)
 			}
 		}
 		fmt.Fprintf(os.Stderr, "\r  generating crib table… rank %d/13", lo)

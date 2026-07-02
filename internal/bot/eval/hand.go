@@ -48,6 +48,31 @@ func ExpectedHandValue(keep [4]cribbage.Card, seen []cribbage.Card) float64 {
 	return float64(sum) / float64(len(starters))
 }
 
+// HandScoreDistSize bounds a hand score histogram: hand scores run 0..29.
+const HandScoreDistSize = 30
+
+// HandValueDist is the exact distribution of the kept four's show score over
+// every possible starter — the same sweep as ExpectedHandValue, kept as a
+// histogram instead of collapsed to the mean. The win-probability objective
+// needs distributions: near the end of the game, a hand that scores 8-or-nothing
+// and a hand that scores a flat 4 have the same mean and very different chances
+// of counting out.
+func HandValueDist(keep [4]cribbage.Card, seen []cribbage.Card) [HandScoreDistSize]float64 {
+	var dist [HandScoreDistSize]float64
+	starters := remaining(seen, keep[:])
+	if len(starters) == 0 {
+		return dist
+	}
+	for _, s := range starters {
+		t, _ := hand.Total(keep, s, false)
+		dist[t]++
+	}
+	for i := range dist {
+		dist[i] /= float64(len(starters))
+	}
+	return dist
+}
+
 // discardPairs enumerates the 15 ways to choose two of the six dealt cards,
 // returning the discard pair and the four kept cards.
 func discardPairs(h [6]cribbage.Card) (discards [][2]cribbage.Card, keeps [][4]cribbage.Card) {

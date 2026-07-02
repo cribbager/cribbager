@@ -33,7 +33,10 @@ const DefaultName = "champion"
 //
 // v2: calibrated pegging opponent model (discard-policy keep priors, own-throw
 // exclusion, live-series go inference) — promoted at +0.66 pts/pair over v1.
-const Version = "2"
+// v3: win-probability objective for discard and play once either player is in
+// reach of the target — promoted at +0.011 wins/pair (full game) and +0.011
+// pooled over the positional fixtures over v2.
+const Version = "3"
 
 // Names lists the production bots: the champion (the default opponent) and the
 // legal-random baseline, kept as the evaluator's noise floor and the engine's
