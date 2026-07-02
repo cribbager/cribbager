@@ -7,6 +7,7 @@ import (
 )
 
 //go:generate go run cribtable_gen.go
+//go:generate go run keepprob_gen.go
 
 // CribEV returns the exact expected crib value (in points) of throwing the two
 // cards a and b to the crib, under a uniform opponent and starter. It is an O(1)
