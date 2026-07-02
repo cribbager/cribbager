@@ -103,26 +103,37 @@ type RankedPlay struct {
 	Score float64 // net EV (Mine − Reply, plus the low-card tie-breaker)
 }
 
-// RankPlays scores every legal play best-first by one-ply net EV. It is the
-// single source of truth for the play decision and its explanation; the unseen
-// set and opponent hand size are computed once.
+// RankPlays scores every legal play best-first by one-ply net EV, pricing the
+// opponent's reply with the calibrated belief (belief.go): unseen cards
+// weighted by the champion's own discard policy, the player's remembered crib
+// throw excluded, and exact elimination from a live-series go. Promoted over
+// the uniform model at +0.66 pts/pair (95% CI [+0.44, +0.87], 6000 duplicate
+// deal-pairs). It is the single source of truth for the play decision and its
+// explanation; the belief is computed once per decision.
 func RankPlays(v game.PlayerView) []RankedPlay {
-	u := unseen(v)
-	oppSize := oppHandSize(v)
+	pool, q := calibratedBelief(v)
+	return rankPlaysWith(v, func(pile []cribbage.Card, count int) float64 {
+		return ExpectedOppReplyBelief(pile, count, pool, q)
+	})
+}
+
+// rankPlaysWith is the shared ranking loop: score every legal play by immediate
+// points minus the estimated opponent reply, best-first.
+func rankPlaysWith(v game.PlayerView, reply func(pile []cribbage.Card, count int) float64) []RankedPlay {
 	ranked := make([]RankedPlay, len(v.LegalPlays))
 	for i, c := range v.LegalPlays {
 		mine := PlayValue(v.Pile, c)
 		count := v.Count + c.Rank.PipValue()
-		reply := 0.0
+		rep := 0.0
 		if count != 31 {
 			newPile := append(append([]cribbage.Card(nil), v.Pile...), c)
-			reply = ExpectedOppReply(newPile, count, u, oppSize)
+			rep = reply(newPile, count)
 		}
 		ranked[i] = RankedPlay{
 			Card:  c,
 			Mine:  mine,
-			Reply: reply,
-			Score: float64(mine) - reply + pegTieBreak(c),
+			Reply: rep,
+			Score: float64(mine) - rep + pegTieBreak(c),
 		}
 	}
 	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].Score > ranked[j].Score })

@@ -30,7 +30,10 @@ const DefaultName = "champion"
 
 // Version is the shipped (champion) bot's algorithm version. Bump it whenever the
 // champion's logic changes, so finished games record which bot version played them.
-const Version = "1"
+//
+// v2: calibrated pegging opponent model (discard-policy keep priors, own-throw
+// exclusion, live-series go inference) — promoted at +0.66 pts/pair over v1.
+const Version = "2"
 
 // Names lists the production bots: the champion (the default opponent) and the
 // legal-random baseline, kept as the evaluator's noise floor and the engine's
