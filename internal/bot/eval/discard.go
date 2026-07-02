@@ -34,6 +34,7 @@ type RankedDiscard struct {
 	EHand   float64 // exact expected show value of the kept four
 	Crib    float64 // expected crib value, signed (+ your crib, − opponent's)
 	Score   float64 // EHand + Crib — what the discard maximizes
+	Win     float64 // P(win) with this hold (set by RankDiscardsWin near the end; else 0)
 }
 
 // RankDiscards scores all 15 holds best-first by exact expected hand value plus

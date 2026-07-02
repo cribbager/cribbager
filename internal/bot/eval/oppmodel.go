@@ -101,6 +101,7 @@ type RankedPlay struct {
 	Mine  int     // immediate points
 	Reply float64 // expected opponent reply
 	Score float64 // net EV (Mine − Reply, plus the low-card tie-breaker)
+	Win   float64 // P(win) after this play (set by RankPlaysWin near the end; else 0)
 }
 
 // RankPlays scores every legal play best-first by one-ply net EV, pricing the

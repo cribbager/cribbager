@@ -45,15 +45,18 @@ func (b *randomBot) Play(v game.PlayerView) cribbage.Card {
 // --- Champion: the shipped bot -----------------------------------------------
 
 // champion is THE bot — the single opponent the product plays against and the
-// one we keep improving. Discard: exact crib-aware expected value (deterministic
-// table lookup, no sampling). Pegging: one-ply net EV against an opponent model
-// that prices in the opponent's best reply, weighted by how likely they are to
-// hold each card. Fully deterministic — same view in, same move out — so it
-// takes no RNG.
+// one we keep improving. Both decisions maximize WIN PROBABILITY: away from the
+// target that provably reduces to exact point EV (crib-aware discard tables,
+// one-ply net-EV pegging against the calibrated opponent belief); once either
+// player is in reach of 121, holds and plays are ranked by P(win) — risky when
+// behind, safe when ahead, with no hand-written rules. Fully deterministic —
+// same view in, same move out — so it takes no RNG.
 //
 // To improve it: build a challenger in internal/bot/lab, beat this in a
-// duplicate-deal comparison (bot.Compare, run as a go test), then fold the
-// winning change in here and delete the challenger. There is only ever one champion.
+// duplicate-deal comparison (bot.Compare, run as a go test — points margin for
+// point-EV changes, paired win-difference plus the positional fixtures for
+// score-aware ones), then fold the winning change in here and delete the
+// challenger. There is only ever one champion.
 type champion struct{}
 
 func newChampion() Bot { return champion{} }
@@ -64,8 +67,8 @@ func (champion) Name() string { return DefaultName }
 func (champion) Version() string { return Version }
 
 func (champion) Discard(v game.PlayerView) [2]cribbage.Card {
-	d, _ := eval.BestDiscardEV(hand6(v.YourHand), v.Dealer == v.You)
+	d, _ := eval.BestDiscardWin(hand6(v.YourHand), v.Dealer == v.You, v.Scores[v.You], v.Scores[1-v.You])
 	return d
 }
 
-func (champion) Play(v game.PlayerView) cribbage.Card { return eval.BestPlayNetEV(v) }
+func (champion) Play(v game.PlayerView) cribbage.Card { return eval.BestPlayWin(v) }
