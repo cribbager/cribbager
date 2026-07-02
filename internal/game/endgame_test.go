@@ -175,4 +175,61 @@ func TestPoneWinsAtShowBeforeDealerCounts(t *testing.T) {
 	if got := g.Scores()[dealer]; got != dealerScoreBeforeShow {
 		t.Fatalf("dealer score = %d, want %d (unchanged by the pone's win)", got, dealerScoreBeforeShow)
 	}
+
+	// The dealer's hand and the crib, though never scored, ARE revealed face-up
+	// (scoreless) so both players can see every hand: exactly two ShowNotCounted
+	// events — the dealer's four kept cards, and the four-card crib.
+	var handReveal, cribReveal *ShowNotCounted
+	for _, e := range all {
+		if sn, ok := e.(ShowNotCounted); ok {
+			s := sn
+			if s.IsCrib {
+				cribReveal = &s
+			} else {
+				handReveal = &s
+			}
+		}
+	}
+	if handReveal == nil || cribReveal == nil {
+		t.Fatalf("want a ShowNotCounted for both the dealer hand and the crib; got hand=%v crib=%v", handReveal, cribReveal)
+	}
+	if handReveal.Seat != dealer {
+		t.Errorf("uncounted hand seat = %v, want dealer %v", handReveal.Seat, dealer)
+	}
+	if !cardsetEqual(handReveal.Cards, cardsFrom(t, "KC", "TC", "TD", "TS")) {
+		t.Errorf("uncounted dealer hand = %v, want KC TC TD TS", handReveal.Cards)
+	}
+	if !cardsetEqual(cribReveal.Cards, cardsFrom(t, "2H", "2D", "2C", "2S")) {
+		t.Errorf("uncounted crib = %v, want 2H 2D 2C 2S", cribReveal.Cards)
+	}
+}
+
+// cardsFrom builds a card slice from names.
+func cardsFrom(t *testing.T, names ...string) []cribbage.Card {
+	t.Helper()
+	out := make([]cribbage.Card, len(names))
+	for i, n := range names {
+		out[i] = mustCard(t, n)
+	}
+	return out
+}
+
+// cardsetEqual compares two card slices as multisets (order-independent).
+func cardsetEqual(a, b []cribbage.Card) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	count := map[cribbage.Card]int{}
+	for _, c := range a {
+		count[c]++
+	}
+	for _, c := range b {
+		count[c]--
+	}
+	for _, n := range count {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
 }

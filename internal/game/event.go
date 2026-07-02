@@ -74,14 +74,25 @@ type CribShown struct {
 // GameWon records that a seat reached the target score.
 type GameWon struct{ Seat Seat }
 
-func (CutForDeal) isEvent()  {}
-func (HandDealt) isEvent()   {}
-func (Discarded) isEvent()   {}
-func (StarterCut) isEvent()  {}
-func (CardPlayed) isEvent()  {}
-func (Pass) isEvent()        {}
-func (GoAwarded) isEvent()   {}
-func (SeriesReset) isEvent() {}
-func (HandShown) isEvent()   {}
-func (CribShown) isEvent()   {}
-func (GameWon) isEvent()     {}
+// ShowNotCounted records a hand or crib that was NOT scored at the show because
+// the game had already ended (a player pegged out earlier in the show). It carries
+// the cards for display only — it has no Score and never affects the running total.
+// Seat is the hand's owner, or the dealer for the crib (IsCrib true).
+type ShowNotCounted struct {
+	Seat   Seat
+	Cards  []cribbage.Card
+	IsCrib bool
+}
+
+func (CutForDeal) isEvent()     {}
+func (HandDealt) isEvent()      {}
+func (Discarded) isEvent()      {}
+func (StarterCut) isEvent()     {}
+func (CardPlayed) isEvent()     {}
+func (Pass) isEvent()           {}
+func (GoAwarded) isEvent()      {}
+func (SeriesReset) isEvent()    {}
+func (HandShown) isEvent()      {}
+func (CribShown) isEvent()      {}
+func (GameWon) isEvent()        {}
+func (ShowNotCounted) isEvent() {}

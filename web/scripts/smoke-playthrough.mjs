@@ -44,7 +44,8 @@ try {
     // All clicks are scoped to `.controls`, never the game-over overlay's
     // "New game" — so the overlay is the only way the loop exits.
     const step = () => page.evaluate(() => {
-        if (document.querySelector('.overlay'))
+        // Game over is an in-page results box now (no modal overlay).
+        if (document.querySelector('.results-box'))
             return 'over';
         // Discard: select two selectable hand cards, then confirm.
         if (document.querySelector('.hand .card.selectable')) {
@@ -106,17 +107,18 @@ try {
         // delay, so we don't re-click it many times before the render clears it.
         await wait(action === 'wait' ? 80 : action === 'button' ? 160 : 35);
     }
-    const overlay = await page.$('.overlay');
-    const result = overlay ? await page.$eval('.overlay', (o) => o.textContent || '') : '(no game over)';
+    const resultsBox = await page.$('.results-box');
+    const result = resultsBox ? await page.$eval('.results-box', (o) => o.textContent || '') : '(no game over)';
     await page.screenshot({ path: shot('_smoke-3-gameover.png') });
     console.log('Discards confirmed    :', hands);
     console.log('Cards pegged by human :', plays);
     console.log('Continue/Start clicks :', clicks);
-    console.log('Game-over overlay text:', JSON.stringify(result.replace(/\s+/g, ' ').trim()));
+    console.log('Game-over results text:', JSON.stringify(result.replace(/\s+/g, ' ').trim()));
     console.log('Console/page errors   :', errors.length);
     for (const e of errors)
         console.log('   ' + e);
-    const ok = !!overlay && /wins|win/i.test(result) && errors.length === 0;
+    // A terminal box reading "You win" or "You lose" (either is a valid finish).
+    const ok = !!resultsBox && /you (win|lose)/i.test(result) && errors.length === 0;
     if (!ok) {
         // Show what the page looked like at the end so a stall is diagnosable.
         const snap = await page.evaluate(() => ({

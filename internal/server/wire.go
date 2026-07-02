@@ -53,6 +53,7 @@ type Delta struct {
 	Points        int          `json:"points"`
 	Count         int          `json:"count"`
 	Total         int          `json:"total"`
+	IsCrib        bool         `json:"isCrib,omitempty"` // set on a show_uncounted delta for the crib
 	Scores        *[2]int      `json:"scores,omitempty"`
 	Combos        []ScoreCombo `json:"combos,omitempty"`
 
@@ -162,6 +163,12 @@ func projectEvent(viewer game.Seat, e game.Event, seq int) Delta {
 	case game.GameWon:
 		seat := e.Seat
 		d.Type, d.Seat = "game_won", &seat
+
+	case game.ShowNotCounted:
+		// A hand or crib revealed face-up but never scored (the game ended mid-show).
+		// No total/combos — the client shows the cards without a score.
+		seat := e.Seat
+		d.Type, d.Seat, d.Cards, d.IsCrib = "show_uncounted", &seat, e.Cards, e.IsCrib
 	}
 	return d
 }

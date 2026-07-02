@@ -13,6 +13,10 @@ import { cardFace } from './cardFace.js';
 import { buildBreakdownLines, breakdownList } from './comboBreakdown.js';
 import { GameClient } from '../net/client.js';
 import { mountHeader } from './header.js';
+// In-game "Evaluate game": rate this game's discards client-side (works for
+// guests/bot/mp, no login) and render them with the shared analysis view.
+import { buildEvaluationData } from './evaluation.js';
+import { analysisBody } from './analysisRender.js';
 // HUMAN/BOT are UI positions: "me" at the bottom, the opponent at the top.
 const HUMAN = 0;
 const BOT = 1;
@@ -35,7 +39,7 @@ function h(tag, attrs = {}, ...kids) {
             e.setAttribute(k, v);
     }
     for (const kid of kids)
-        e.append(kid);
+        if (kid != null && kid !== false) e.append(kid); // skip nullish so `cond ? node : null` is safe
     return e;
 }
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -55,7 +59,14 @@ const fresh = () => ({
     selected: [],
     legal: null,
     cut: null,
+    // The show now reveals every hand + the crib AT ONCE (no per-hand Continue):
+    // show.hands[p] = { cards, starter, score } per UI seat, show.crib =
+    // { owner, cards, starter, score }. score is null for an uncounted reveal
+    // (the game ended mid-show). null show === not in the show.
     show: null,
+    // over: the terminal result, shown as an in-page box (no modal). Null until the
+    // game ends: { won, my, opp, skunk }.
+    over: null,
 });
 let state = fresh();
 // ---------- scaffold ----------
@@ -81,9 +92,9 @@ const quitButton = h('button', { class: 'quit-toggle' }, 'Leave game');
 quitButton.addEventListener('click', onQuit);
 // The signed-in identity now lives in the global site header, and branding comes
 // from the global wordmark — so the game view no longer needs its own title. The
-// Leave control sits in a footer below the board (away from the header profile
-// menu, to avoid mis-taps).
-app.append(elFelt, h('div', { class: 'game-footer' }, quitButton));
+// Leave control is hidden for now, so the board's footer is dropped entirely
+// (quitButton stays referenced by onQuit/setChrome, just not mounted).
+app.append(elFelt);
 // Mount the global site header (wordmark + auth/identity). It sits above #app and
 // never sets the page width, so the board layout is unaffected. We also mirror the
 // auth state locally: post-game discard analysis is account-scoped (it lives under
@@ -92,10 +103,10 @@ app.append(elFelt, h('div', { class: 'game-footer' }, quitButton));
 let currentUser = null;
 mountHeader({ onAuthChange: (u) => { currentUser = u; } });
 
-// setChrome shows the right header controls for the current screen: Leave only
-// while in a game.
-function setChrome(mode) { // 'bot' | 'mp' | 'menu'
-    quitButton.style.display = mode === 'menu' ? 'none' : '';
+// setChrome shows the right header controls for the current screen. The Leave
+// button is hidden for now (kept in the DOM so onQuit and its wiring stay intact).
+function setChrome(_mode) { // 'bot' | 'mp' | 'menu'
+    quitButton.style.display = 'none';
 }
 // elControls lives INSIDE the player area (appended to the you-seat in render()).
 // ---------- the board (reused module), mounted once ----------
@@ -130,6 +141,17 @@ function awardPoints(player, points) {
         return;
     state.score[player] = Math.min(121, state.score[player] + points);
     board.score(boardTrack(player), points);
+}
+// snapScore advances a player's score WITHOUT the step-by-step counting animation:
+// the peg jumps straight to its new position. Used at the show, where every hand
+// and the crib are revealed at once (no per-hand peg-counting animation).
+function snapScore(player, points) {
+    if (points <= 0)
+        return;
+    const track = boardTrack(player);
+    const prevFront = board.getState().pegs[track].front;
+    state.score[player] = Math.min(121, state.score[player] + points);
+    board.setPegs(track, { front: state.score[player], back: Math.min(prevFront, state.score[player]) });
 }
 // renderFromView is the correctness keystone: a SOFT projection of the server's
 // authoritative per-seat View onto the board. The event reducer (translate/onEvent/
@@ -220,25 +242,77 @@ function stageEl() {
         return '';
     return h('div', { class: 'stage' }, h('div', { class: 'cut-row' }, h('div', { class: 'cut-seat' }, h('div', { class: 'rail-label' }, 'Opponent'), cardEl(state.cut.cards[BOT])), h('div', { class: 'cut-seat' }, h('div', { class: 'rail-label' }, 'You'), cardEl(state.cut.cards[HUMAN]))), h('div', { class: 'cut-result' }, `${seatName(state.cut.dealer)} deal${state.cut.dealer === HUMAN ? '' : 's'} first.`));
 }
-// The show: top row = the counted hand + starter + big total; second row = a
-// concise "who scored N" plus an "Explain the score" link (AM1). Official play
-// carries no always-on breakdown — the per-combo detail lives behind the overlay,
-// re-derived on demand from the hand + starter (see openExplain).
-function showRows() {
-    const sh = state.show;
-    const cards = sortCards(sh.hand).map((c) => cardEl(c));
-    const starterEl = cardEl(sh.starter, { cls: 'show-starter' });
-    const lead = sh.isCrib ? [h('span', { class: 'crib-tag' }, 'crib')] : [];
-    const showRow = h('div', { class: 'show-row' }, ...lead, ...cards, starterEl, h('div', { class: 'show-score' }, String(sh.score.total)));
-    const total = sh.score.total;
-    const sentence = sh.isCrib
-        ? `The crib scores ${total}`
-        : `${sh.player === HUMAN ? 'You' : oppLabel} scored ${total}`;
-    const bd = h('div', { class: 'show-breakdown' }, h('span', { class: 'show-total' }, sentence));
-    const explain = h('button', { class: 'explain-btn' }, 'Explain the score');
-    explain.addEventListener('click', () => openExplain(sh));
-    bd.append(explain);
-    return [showRow, bd];
+// The show now reveals every hand and the crib AT ONCE: each player's four cards
+// go in their own hand area, the crib in the dealer's pegging area (see render).
+// showHandEls builds the face-up cards + starter + the count for ONE revealed hand
+// or crib. A counted reveal shows its total (with an "Explain" affordance); an
+// uncounted one (the game ended mid-show) shows the cards with no score.
+function showHandEls(entry, isCrib, player) {
+    const cards = sortCards(entry.cards).map((c) => cardEl(c));
+    const starterEl = cardEl(entry.starter, { cls: 'show-starter' });
+    const lead = isCrib ? [h('span', { class: 'crib-tag' }, 'crib')] : [];
+    const kids = [...lead, ...cards, starterEl];
+    if (entry.score) {
+        kids.push(h('div', { class: 'show-score' }, String(entry.score.total)));
+        const explain = h('button', { class: 'explain-btn' }, 'Explain');
+        explain.addEventListener('click', () => openExplain({ hand: entry.cards, starter: entry.starter, isCrib, player }));
+        kids.push(explain);
+    } else {
+        kids.push(h('div', { class: 'show-uncounted' }, 'not counted'));
+    }
+    return kids;
+}
+
+// ---------- the left-side versus panel + game-over results box ----------
+// myName / oppName label the two seats. A guest is "Anonymous"; my own row is
+// suffixed "(You)". The bot is always "Cribbager Bot".
+const myName = () => `${(currentUser && currentUser.DisplayName) || 'Anonymous'} (You)`;
+const oppName = () => (lastMode === 'bot' ? 'Cribbager Bot' : oppLabel);
+function playerRow(p) {
+    return h('div', { class: 'vs-row' },
+        h('span', { class: 'vs-dot ' + (p === HUMAN ? 'you' : 'opp') }),
+        h('span', { class: 'vs-name' }, p === HUMAN ? myName() : oppName()),
+        h('span', { class: 'vs-score' }, String(state.score[p])));
+}
+// resultsBox is the in-page game-over card (no modal): outcome, final score (mine
+// first), and the actions — Play again / Rematch, plus Evaluate (client-side, so
+// it's offered to everyone).
+function resultsBox() {
+    const o = state.over;
+    const skunkTxt = o.skunk === 'double' ? ' — double skunk!' : o.skunk === 'skunk' ? ' — skunk!' : '';
+    const again = h('button', { class: 'primary' }, lastMode === 'mp' ? 'Rematch' : 'Play again');
+    again.addEventListener('click', lastMode === 'mp' ? goNewOpen : goNewBot);
+    const evalBtn = h('button', {}, 'Evaluate game');
+    evalBtn.addEventListener('click', openEvaluation);
+    return h('div', { class: 'panel results-box ' + (o.won ? 'won' : 'lost') },
+        h('div', { class: 'results-outcome' }, (o.won ? 'You win' : 'You lose') + skunkTxt),
+        h('div', { class: 'results-score' }, `${o.my} – ${o.opp}`),
+        h('div', { class: 'results-actions' }, again, evalBtn),
+        h('a', { class: 'results-home', href: '/' }, 'Back to home'));
+}
+function sidePanel() {
+    return h('div', { class: 'side-panel' },
+        h('div', { class: 'panel vs-box' }, playerRow(HUMAN), playerRow(BOT)),
+        state.over ? resultsBox() : null);
+}
+// openEvaluation rates the discards of the game just played and shows the shared
+// analysis view in an overlay. It runs entirely client-side (buildEvaluationData
+// → POST /tools/discard-eval per hand), so it needs no login or stored result.
+async function openEvaluation() {
+    const body = h('div', { class: 'eval-body' }, h('div', { class: 'sq-answer-loading' }, 'Evaluating…'));
+    const close = h('button', { class: 'primary' }, 'Close');
+    const overlay = h('div', { class: 'overlay' });
+    close.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
+    overlay.append(h('div', { class: 'card-modal eval-modal' },
+        h('h2', {}, 'Game evaluation'), body, h('div', {}, close)));
+    document.body.append(overlay);
+    try {
+        const data = await buildEvaluationData(evalHands);
+        body.replaceChildren(...analysisBody(data));
+    } catch {
+        body.replaceChildren(h('p', {}, 'Sorry — we couldn’t evaluate this game.'));
+    }
 }
 
 // openExplain shows a display-only modal breaking the hand (or crib) down as
@@ -277,14 +351,31 @@ async function openExplain(sh) {
     body.replaceChildren(breakdownList(lines));
 }
 // ---------- main render (the board self-manages inside boardMount) ----------
-function render() {
+// handArea builds one seat's hand area during the show (face-up cards) or, off
+// the show, the seat's normal hand (face-down count for the opponent, interactive
+// cards for you). cribPeg builds the pegging area: the played pile normally, or
+// the crib (for its owner) during the show.
+function handArea(p, youHand) {
     const sh = state.show;
-    // Opponent (top): show rows when counting; else face-down hand + pegging row.
-    const oppRows = sh && sh.player === BOT
-        ? showRows()
-        : [h('div', { class: 'hand' }, ...Array.from({ length: state.botHandCount }, () => cardEl(null, { faceDown: true }))), peggingRow(BOT)];
-    const oppSeat = h('div', { class: 'seat opp' }, ...oppRows);
-    // Your hand (interactive).
+    if (sh && sh.hands[p])
+        return h('div', { class: 'hand show-hand' }, ...showHandEls(sh.hands[p], false, p));
+    if (p === BOT)
+        return h('div', { class: 'hand' }, ...Array.from({ length: state.botHandCount }, () => cardEl(null, { faceDown: true })));
+    return youHand;
+}
+function cribPeg(p) {
+    const sh = state.show;
+    if (sh) {
+        return sh.crib && sh.crib.owner === p
+            ? h('div', { class: 'pegged show-crib' }, ...showHandEls(sh.crib, true, p))
+            : h('div', { class: 'pegged' });
+    }
+    return peggingRow(p);
+}
+function render() {
+    // Opponent (top): hand area then pegging area (crib during the show).
+    const oppSeat = h('div', { class: 'seat opp' }, handArea(BOT), cribPeg(BOT));
+    // Your hand (interactive) — built here so handArea can slot it in off the show.
     const youHand = h('div', { class: 'hand' });
     for (const card of sortCards(state.humanHand)) {
         if (state.discarding) {
@@ -299,10 +390,11 @@ function render() {
             youHand.append(cardEl(card));
         }
     }
-    // You (bottom): show rows when counting; else pegging + hand. Actions always last.
-    const youRows = sh && sh.player === HUMAN ? showRows() : [peggingRow(HUMAN), youHand];
-    const youSeat = h('div', { class: 'seat you' }, ...youRows, elControls);
-    elFelt.replaceChildren(h('div', { class: 'table-inner' }, oppSeat, h('div', { class: 'board-area' }, h('div', { class: 'board-row' }, boardMount)), stageEl(), youSeat));
+    // You (bottom): pegging area then hand. Actions always last.
+    const youSeat = h('div', { class: 'seat you' }, cribPeg(HUMAN), handArea(HUMAN, youHand), elControls);
+    const inGame = state.dealer !== null || state.over;
+    const tableInner = h('div', { class: 'table-inner' }, oppSeat, h('div', { class: 'board-area' }, h('div', { class: 'board-row' }, boardMount)), stageEl(), youSeat);
+    elFelt.replaceChildren(h('div', { class: 'table-layout' }, inGame ? sidePanel() : null, tableInner));
 }
 // ---------- interaction ----------
 let resolveDiscard = null;
@@ -452,22 +544,36 @@ async function onEvent(e) {
             await waitContinue();
             break;
         }
-        case 'show': {
-            if (e.player === BOT && e.which !== 'crib')
+        case 'show':
+        case 'showUncounted': {
+            // Every hand and the crib are revealed AT ONCE and left on screen until a
+            // single Continue (handled at handComplete) or the game-over box. Each
+            // 'show'/'showUncounted' event just ADDS its reveal to state.show and snaps
+            // the peg to the new total (no per-hand counting animation). An uncounted
+            // reveal (game ended mid-show) carries no score.
+            const counted = e.type === 'show';
+            const isCrib = e.which === 'crib';
+            if (e.player === BOT && !isCrib)
                 state.botHandCount = 0;
             state.starter = e.starter;
             state.inPlay = false;
             state.played = [[], []];
             state.speech = ['', ''];
-            state.show = { player: e.player, isCrib: e.which === 'crib', hand: e.hand.slice(), starter: e.starter, score: e.score };
-            render(); // count the whole hand first (cards + starter + total shown)…
-            await delay(450);
-            awardPoints(e.player, e.score.total); // …then move the peg, once
-            await waitContinue();
-            state.show = null;
+            if (!state.show) state.show = { hands: [null, null], crib: null };
+            const entry = { cards: e.hand.slice(), starter: e.starter, score: counted ? e.score : null };
+            if (isCrib) { entry.owner = e.player; state.show.crib = entry; }
+            else state.show.hands[e.player] = entry;
+            if (counted) snapScore(e.player, e.score.total); // peg jumps straight to final
+            render();
             break;
         }
         case 'handComplete': {
+            // A single Continue gates the move from the show to the next deal (only if a
+            // show is on screen — the opening deal has none). Then clear the reveal.
+            if (state.show) {
+                await waitContinue();
+                state.show = null;
+            }
             state.dealer = e.nextDealer;
             state.played = [[], []];
             state.speech = ['', ''];
@@ -478,7 +584,6 @@ async function onEvent(e) {
         }
         case 'gameOver': {
             const won = e.winner === HUMAN;
-            const skunk = e.skunk === 'double' ? ' — a double skunk!' : e.skunk === 'skunk' ? ' — a skunk!' : '';
             // Cribbage ends the instant a player reaches 121, so the DISPLAYED score
             // is capped there even though the engine reports the raw show total (e.g.
             // a final hand can total the winner past 121). This is a pure display
@@ -486,23 +591,16 @@ async function onEvent(e) {
             // which already clamps at 121), so it introduces no divergence. Skunk
             // thresholds use the LOSER's score (always < 121), so they're unaffected.
             const shown = [Math.min(state.score[HUMAN], 121), Math.min(state.score[BOT], 121)];
-            // Post-game discard analysis (A8): offered only to a signed-in participant,
-            // for whom this finished game is a stored result (a guest's game isn't
-            // account-scoped, so the analysis endpoint would 404 — don't show it).
-            // A2 adds a "Replay this game" link beside it (same account-scoping):
-            // the move-by-move spectator replay of this finished game.
-            const endLinks = (currentUser && curGameId)
-                ? h('div', { class: 'end-links' },
-                    h('a', { class: 'end-analyze', href: '/analyze.html?game=' + encodeURIComponent(curGameId) }, 'Analyze this game'),
-                    h('a', { class: 'end-replay', href: '/replay.html?game=' + encodeURIComponent(curGameId) }, 'Replay this game'))
-                : null;
-            // vs a human: "Rematch" hosts a fresh game (new shareable link). vs the
-            // bot: "New game" starts another immediately. Either way "Menu" returns.
-            endOverlay(won ? 'You win!' : `${oppLabel} wins`,
-                `${shown[HUMAN]} – ${shown[BOT]}${skunk}`,
-                lastMode === 'mp' ? 'Rematch' : 'New game',
-                lastMode === 'mp' ? goNewOpen : goNewBot,
-                endLinks);
+            // No modal: the terminal result is an in-page box under the versus panel
+            // (see resultsBox). It offers Play again / Rematch and Evaluate (the latter
+            // computed client-side, so every player — guest, bot, or mp — can use it).
+            // Keep any show reveal on screen beneath it. Clean up the live game like
+            // endOverlay did (drop the saved entry, close the stream).
+            if (curGameId) clearGame(curGameId);
+            if (activeStream) { activeStream.close(); activeStream = null; }
+            clearControls();
+            state.over = { won, my: shown[HUMAN], opp: shown[BOT], skunk: e.skunk };
+            render();
             break;
         }
     }
@@ -595,6 +693,9 @@ function translate(d, ctx) {
         }
         case 'crib_shown':
             return [{ type: 'show', player: ctx.dealer, which: 'crib', hand: CS(d.cards), starter: ctx.starter, score: showScore(d) }];
+        case 'show_uncounted':
+            // A hand or crib revealed but never scored (the game ended mid-show).
+            return [{ type: 'showUncounted', player: uiSeat(d.seat), which: d.isCrib ? 'crib' : 'hand', hand: CS(d.cards), starter: ctx.starter }];
         case 'game_won': {
             const winner = uiSeat(d.seat);
             return [{ type: 'gameOver', winner, skunk: skunkOf(state.score, winner) }];
@@ -634,6 +735,10 @@ const loadGame = (id) => allSaved()[id] || null;
 const clearGame = (id) => { try { const m = allSaved(); delete m[id]; localStorage.setItem(SAVE_KEY, JSON.stringify(m)); } catch { /* ignore */ } };
 let lastMode = 'bot';    // 'bot' | 'mp' — drives the game-over options (new game vs rematch)
 let activeStream = null; // the live EventSource, closed when a new game starts
+// evalHands captures every hand I discarded from, for the client-side "Evaluate
+// game" (openEvaluation). Reset at the start of each game (startGame/startMultiplayer).
+let evalHands = [];
+const recordDiscard = (view, chosen) => evalHands.push({ hand: view.hand.map(cardCode), dealer: view.isMyCrib, throw: chosen.map(cardCode) });
 let curGameId = null;    // the active game + my token, for the Leave button + cleanup
 let curToken = null;
 
@@ -660,6 +765,7 @@ async function startGame() {
     MY_SEAT = 0;
     oppLabel = 'Opponent';
     lastMode = 'bot';
+    evalHands = [];
     setChrome('bot');
     if (activeStream) { activeStream.close(); activeStream = null; }
     setStatus(null);
@@ -679,7 +785,9 @@ async function startGame() {
         if (snap.Winner != null) break;
         state.humanHand = CS(snap.YourHand);
         if (snap.Phase === 'discard' && snap.YourHand.length === 6) {
-            const chosen = await humanAgent.discard(discardViewFromSnap(snap));
+            const dview = discardViewFromSnap(snap);
+            const chosen = await humanAgent.discard(dview);
+            recordDiscard(dview, chosen);
             const resp = await client.act(game_id, player_token, { type: 'discard', cards: chosen.map(cardToStr) });
             await animate(resp.deltas, ctx);
         } else if (snap.Phase === 'play' && snap.ToPlay === MY_SEAT) {
@@ -703,6 +811,7 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
     MY_SEAT = mySeat;
     oppLabel = 'Opponent';
     lastMode = 'mp';
+    evalHands = [];
     setChrome('mp');
     if (activeStream) { activeStream.close(); activeStream = null; }
     curGameId = gameId; curToken = token;
@@ -760,7 +869,9 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
         state.humanHand = CS(snap.YourHand);
         if (snap.Phase === 'discard' && snap.YourHand.length === 6) {
             setStatus(null);
-            const chosen = await humanAgent.discard(discardViewFromSnap(snap));
+            const dview = discardViewFromSnap(snap);
+            const chosen = await humanAgent.discard(dview);
+            recordDiscard(dview, chosen);
             await client.act(gameId, token, { type: 'discard', cards: chosen.map(cardToStr) });
             return true;
         }

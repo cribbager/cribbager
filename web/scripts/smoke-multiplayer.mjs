@@ -23,9 +23,10 @@ const track = (page, who) => {
 // control button (Start game, Continue). Game over = an overlay modal saying
 // "win". A non-game-over overlay (the menu/invite still up) means "wait".
 const STEP = () => {
-    const ov = document.querySelector('.overlay .card-modal');
-    if (ov && /win/i.test(ov.textContent || '')) return 'over';
-    if (ov) return 'wait';
+    // Game over is now an in-page results box (no modal). Any other modal still up
+    // (e.g. the host's invite overlay) means "wait".
+    if (document.querySelector('.results-box')) return 'over';
+    if (document.querySelector('.overlay .card-modal')) return 'wait';
     if (document.querySelector('.hand .card.selectable')) {
         if (document.querySelectorAll('.hand .card.selected').length < 2) {
             document.querySelector('.hand .card.selectable:not(.selected)')?.click();
@@ -50,9 +51,10 @@ const creds = (page) => page.evaluate(() => {
     const saved = (JSON.parse(localStorage.getItem('cribbager:games') || '{}')[id]) || {};
     return { id, token: saved.token, seat: saved.seat };
 });
-// The two numbers in the game-over overlay, in the page's own [me, opponent] order.
+// The two numbers in the game-over results box, in the page's own [me, opponent]
+// order (the box renders "myScore – oppScore").
 const overlayScores = (page) => page.evaluate(() => {
-    const p = document.querySelector('.overlay .card-modal p');
+    const p = document.querySelector('.results-box .results-score');
     const nums = ((p && p.textContent) || '').match(/\d+/g) || [];
     return nums.slice(0, 2).map(Number);
 });
@@ -128,7 +130,7 @@ try {
         await wait(40);
     }
 
-    const text = async (p) => (await p.$('.overlay .card-modal')) ? p.$eval('.overlay .card-modal', (o) => o.textContent || '') : '(no game over)';
+    const text = async (p) => (await p.$('.results-box')) ? p.$eval('.results-box', (o) => o.textContent || '') : '(no game over)';
     console.log('actions driven       :', acts);
     console.log('host  game-over      :', await text(host));
     console.log('join  game-over      :', await text(joiner));
