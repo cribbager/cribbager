@@ -40,11 +40,6 @@ const STEP = () => {
     if (btn) { btn.click(); return 'button'; }
     return 'wait';
 };
-const clickButton = (page, re) => page.evaluate((src) => {
-    const rx = new RegExp(src, 'i');
-    [...document.querySelectorAll('.overlay .card-modal button')].find((b) => rx.test(b.textContent))?.click();
-}, re.source);
-
 // --- single-source-of-truth regression helpers ---
 // Each player's identity (game id + token + server seat), read from the same
 // localStorage the client persists. Captured while the game is live, because the
@@ -97,13 +92,13 @@ try {
     const link = await host.$eval('.overlay .card-modal input', (i) => i.value);
     if (!link || !link.includes('/game.html?join=')) throw new Error('no share link: ' + link);
 
-    // Joiner: open the link → "Join game".
+    // Joiner: open the link → the client claims the open seat automatically (no
+    // prompt) and the game begins. Joining opens the SSE stream on load, so use
+    // domcontentloaded (the network never goes idle), same as the host above.
     const joiner = await joinCtx.newPage();
     await joiner.setViewport({ width: 900, height: 760 });
     track(joiner, 'join');
-    await joiner.goto(link, { waitUntil: 'networkidle0' });
-    await joiner.waitForSelector('.overlay .card-modal button', { timeout: 15000 });
-    await clickButton(joiner, /join/);
+    await joiner.goto(link, { waitUntil: 'domcontentloaded' });
 
     // Opening invariant: once both reach the discard prompt, each must already see
     // the deal animated — the opponent's 6 face-down cards up top. (A race once let
