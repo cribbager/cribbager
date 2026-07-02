@@ -127,7 +127,9 @@ html, body {
   color: var(--ink);
   font: 15px/1.4 ui-rounded, "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, sans-serif;
 }
-#app { max-width: 880px; margin: 0 auto; padding: 12px 16px 36px; }
+/* Widened from 880 to fit the versus/results rail beside the play area. The felt
+   (play area) keeps its own ~880px width; the extra room is for the left rail. */
+#app { max-width: 1200px; margin: 0 auto; padding: 12px 16px 36px; }
 
 :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
 
@@ -226,8 +228,15 @@ html, body {
 .quit-toggle { padding: 6px 14px; font-size: 13px; font-weight: 700; border: 1px solid var(--line);
   background: var(--panel); color: var(--muted); border-radius: var(--radius-pill); cursor: pointer; box-shadow: var(--shadow); }
 
+/* Game layout: the versus/results rail to the LEFT, the felt (play area) to the
+   right. The felt keeps its own width, so the play area is unaffected by the rail. */
+.game-layout { display: flex; gap: var(--space-4); align-items: flex-start; justify-content: center; }
+.side-rail { width: 260px; flex: none; }
+.side-rail:empty { display: none; } /* collapse before a game starts */
+
 /* felt / table */
 .felt {
+  flex: 0 1 880px; /* keeps its ~880px width beside the rail; shrinks on small screens */
   background: var(--felt);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -290,9 +299,7 @@ html, body {
 
 /* Table layout: the versus/results side panel on the left, the play area on the
    right. The board keeps its own max-width; the flex row centers the pair. */
-.table-layout { display: flex; gap: var(--space-4); align-items: flex-start; justify-content: center; width: 100%; }
-.table-layout > .table-inner { margin: 0; }
-.side-panel { width: 240px; flex: none; display: flex; flex-direction: column; gap: var(--space-3); }
+.side-panel { width: 100%; display: flex; flex-direction: column; gap: var(--space-3); }
 
 /* Versus box: one row per player — a coloured dot (you red, opponent blue, matching
    the board pegs), the name, and the running score on the right. */
@@ -510,6 +517,10 @@ button:active { transform: translateY(1px); }
   .home-auth-form button { width: 100%; }
   .site-header-inner { padding: var(--space-2) var(--space-3); }
   .site-header-right .btn { padding: var(--space-2) var(--space-3); }
+
+  /* Stack the versus/results rail above the felt on a phone (no room beside it). */
+  .game-layout { flex-direction: column; align-items: stretch; }
+  .side-rail { width: 100%; }
 
   /* Mobile quick-win (NU2): stop the pegging/show rows clipping on a ~375px
      phone. The felt/table contain any spill, and the horizontal card rows

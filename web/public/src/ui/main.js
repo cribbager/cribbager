@@ -72,6 +72,10 @@ let state = fresh();
 // ---------- scaffold ----------
 const app = document.getElementById('app');
 const elFelt = h('div', { class: 'felt' });
+// The versus/results rail sits OUTSIDE the felt, to its left, so it never affects
+// the play area's width (the felt keeps its own size). render() fills it; it
+// collapses (via :empty) when there's no game yet.
+const elSide = h('div', { class: 'side-rail' });
 const elControls = h('div', { class: 'controls' });
 // Game-flow status ("waiting for Bob…", "opponent left"). It occupies the
 // action-control zone: when you're waiting you have no move, so the message
@@ -94,7 +98,7 @@ quitButton.addEventListener('click', onQuit);
 // from the global wordmark — so the game view no longer needs its own title. The
 // Leave control is hidden for now, so the board's footer is dropped entirely
 // (quitButton stays referenced by onQuit/setChrome, just not mounted).
-app.append(elFelt);
+app.append(h('div', { class: 'game-layout' }, elSide, elFelt));
 // Mount the global site header (wordmark + auth/identity). It sits above #app and
 // never sets the page width, so the board layout is unaffected. We also mirror the
 // auth state locally: post-game discard analysis is account-scoped (it lives under
@@ -393,8 +397,10 @@ function render() {
     // You (bottom): pegging area then hand. Actions always last.
     const youSeat = h('div', { class: 'seat you' }, cribPeg(HUMAN), handArea(HUMAN, youHand), elControls);
     const inGame = state.dealer !== null || state.over;
-    const tableInner = h('div', { class: 'table-inner' }, oppSeat, h('div', { class: 'board-area' }, h('div', { class: 'board-row' }, boardMount)), stageEl(), youSeat);
-    elFelt.replaceChildren(h('div', { class: 'table-layout' }, inGame ? sidePanel() : null, tableInner));
+    // The rail lives outside the felt (see scaffold); the felt holds only the play
+    // area, so its width is unchanged whether or not the rail is showing.
+    elSide.replaceChildren(inGame ? sidePanel() : '');
+    elFelt.replaceChildren(h('div', { class: 'table-inner' }, oppSeat, h('div', { class: 'board-area' }, h('div', { class: 'board-row' }, boardMount)), stageEl(), youSeat));
 }
 // ---------- interaction ----------
 let resolveDiscard = null;
