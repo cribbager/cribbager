@@ -501,7 +501,7 @@ async function onEvent(e) {
             endOverlay(won ? 'You win!' : `${oppLabel} wins`,
                 `${shown[HUMAN]} – ${shown[BOT]}${skunk}`,
                 lastMode === 'mp' ? 'Rematch' : 'New game',
-                lastMode === 'mp' ? () => goNewOpen(lastName) : goNewBot,
+                lastMode === 'mp' ? goNewOpen : goNewBot,
                 endLinks);
             break;
         }
@@ -633,7 +633,6 @@ const saveGame = (id, o) => { try { const m = allSaved(); m[id] = o; localStorag
 const loadGame = (id) => allSaved()[id] || null;
 const clearGame = (id) => { try { const m = allSaved(); delete m[id]; localStorage.setItem(SAVE_KEY, JSON.stringify(m)); } catch { /* ignore */ } };
 let lastMode = 'bot';    // 'bot' | 'mp' — drives the game-over options (new game vs rematch)
-let lastName = '';       // my display name, reused when hosting a rematch
 let activeStream = null; // the live EventSource, closed when a new game starts
 let curGameId = null;    // the active game + my token, for the Leave button + cleanup
 let curToken = null;
@@ -705,10 +704,9 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
     oppLabel = 'Opponent';
     lastMode = 'mp';
     setChrome('mp');
-    if (opts.name != null) lastName = opts.name;
     if (activeStream) { activeStream.close(); activeStream = null; }
     curGameId = gameId; curToken = token;
-    saveGame(gameId, { token, seat: mySeat, name: lastName });
+    saveGame(gameId, { token, seat: mySeat });
     state = fresh();
     board.reset();
     clearControls();
@@ -812,11 +810,11 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
         // game with a terminal "they left" state and the option to start a new one.
         if (opp && opp.left && !gameOver) {
             gameOver = true;
-            endOverlay(`${oppLabel} left the game`, '', 'New game', () => goNewOpen(lastName));
+            endOverlay(`${oppLabel} left the game`, '', 'New game', goNewOpen);
             return;
         }
         // Record the opponent's name so the homepage's in-progress list can show it.
-        if (!gameOver) saveGame(gameId, { token, seat: mySeat, name: lastName, opp: oppLabel });
+        if (!gameOver) saveGame(gameId, { token, seat: mySeat, opp: oppLabel });
         const nowBoth = players.length === 2 && players.every((p) => p.connected);
         const was = bothConnected;
         bothConnected = nowBoth;
@@ -850,17 +848,11 @@ function modalOverlay(...kids) {
     document.body.append(ov);
     return ov;
 }
-const nameField = () => {
-    const i = h('input', { type: 'text', placeholder: 'Your name (optional)', maxlength: '24' });
-    i.style.cssText = 'display:block;margin:10px auto;padding:8px;width:90%;box-sizing:border-box;';
-    return i;
-};
-
 // The menu now lives on the homepage (index.html); these are navigations to it or
 // to a fresh game on the game page. Leaving a game means leaving this page.
 const goHome = () => { location.href = '/'; };
 const goNewBot = () => { location.href = '/game.html?new=bot'; };
-const goNewOpen = (name) => { location.href = '/game.html?new=open&name=' + encodeURIComponent(name || ''); };
+const goNewOpen = () => { location.href = '/game.html?new=open'; };
 
 // onQuit leaves the current game from the Leave button. In head-to-head it tells
 // the server (so the opponent learns you left), then returns to the homepage.
@@ -894,15 +886,14 @@ function endOverlay(title, sub, primaryLabel, onPrimary, extra) {
     document.body.append(overlay);
 }
 
-// hostGame opens an `open` game and seats the host as the waiting host. When
-// `isPublic` is true (the home page's "Create a game") it's created with
-// public:true, so the server lists it in the lobby for anyone to join; otherwise
-// ("Challenge a friend") it stays private — reachable only by its shareable link.
-async function hostGame(name, isPublic = false) {
+// hostGame opens a private `open` game and seats the host as the waiting host.
+// The game is reachable only by its shareable link ("Challenge a friend"), so the
+// copy-link is the point — the host sends it to whoever they want to play.
+async function hostGame() {
     state = fresh(); board.reset(); clearControls(); render();
     setChrome('mp');
     setStatus('Waiting for your opponent to join…');
-    const created = await client.create({ mode: 'open', name, public: isPublic });
+    const created = await client.create({ mode: 'open' });
     const { game_id, player_token } = created;
     history.replaceState(null, '', `?game=${game_id}`); // this game lives at its own URL
     // The game id IS the join credential now: share the link or just the id.
@@ -912,36 +903,23 @@ async function hostGame(name, isPublic = false) {
     linkBox.addEventListener('focus', () => linkBox.select());
     const copy = h('button', { class: 'primary' }, 'Copy link');
     copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(link); copy.textContent = 'Copied!'; } catch { linkBox.focus(); } });
-    // A public game also waits in the lobby, so the copy/share is optional; a
-    // private game can only be reached by this link, so the copy is the point.
-    const intro = isPublic
-        ? 'Your game is listed in the lobby — anyone can join. You can also share this link to invite someone directly. The game begins when they join.'
-        : 'Send this link, or share the game ID below — any client can join with it. The game begins when they join.';
-    const ov = modalOverlay(h('h2', {}, isPublic ? 'Waiting for a player' : 'Challenge a friend'),
-        h('p', {}, intro),
+    const ov = modalOverlay(h('h2', {}, 'Challenge a friend'),
+        h('p', {}, 'Send this link, or share the game ID below — any client can join with it. The game begins when they join.'),
         linkBox, h('p', { class: 'gameid' }, 'Game ID: ' + game_id), copy);
-    startMultiplayer(game_id, player_token, 0, { onBothConnected: () => ov.remove(), name }); // dismiss once they connect
+    startMultiplayer(game_id, player_token, 0, { onBothConnected: () => ov.remove() }); // dismiss once they connect
 }
 
-function showJoinScreen(gameId) {
+// joinGame claims the open seat and drops straight into the game — the game id is
+// the only credential, and guests play anonymously, so there is nothing to prompt.
+async function joinGame(gameId) {
     setChrome('mp');
-    const nameIn = nameField();
-    const join = h('button', { class: 'primary' }, 'Join game');
-    const err = h('p', {});
-    const ov = modalOverlay(h('h2', {}, 'Join cribbage game'), nameIn, join, err);
-    join.addEventListener('click', async () => {
-        join.disabled = true;
-        try {
-            const name = nameIn.value.trim();
-            const res = await client.join(gameId, name); // game id is the credential
-            ov.remove();
-            history.replaceState(null, '', `?game=${gameId}`); // move to this game's URL
-            startMultiplayer(gameId, res.player_token, res.seat, { name });
-        } catch (e) {
-            join.disabled = false;
-            err.textContent = 'Could not join: ' + e.message;
-        }
-    });
+    try {
+        const res = await client.join(gameId);
+        history.replaceState(null, '', `?game=${gameId}`); // move to this game's URL
+        startMultiplayer(gameId, res.player_token, res.seat, {});
+    } catch (e) {
+        endOverlay('Could not join', e.message, 'Home', goHome);
+    }
 }
 
 // boot routes the game page from the URL. There is no in-page menu anymore — an
@@ -950,14 +928,13 @@ function boot() {
     const params = new URLSearchParams(location.search);
     const newMode = params.get('new');
     if (newMode === 'bot') { startGame(); return; }
-    // ?public=1 (from the home page's "Create a game") hosts a PUBLIC open game
-    // that lists in the lobby; without it ("Challenge a friend") it stays private.
-    if (newMode === 'open') { hostGame(params.get('name') || '', params.get('public') === '1'); return; }
+    // "Challenge a friend" hosts a private open game reachable only by its link.
+    if (newMode === 'open') { hostGame(); return; }
     const join = params.get('join'); // a game id to join (or resume, if it's already ours)
     if (join) {
         const mine = loadGame(join);
-        if (mine && mine.token) { startMultiplayer(join, mine.token, mine.seat, { resume: true, name: mine.name }); return; }
-        showJoinScreen(join);
+        if (mine && mine.token) { startMultiplayer(join, mine.token, mine.seat, { resume: true }); return; }
+        joinGame(join);
         return;
     }
     const gameId = params.get('game');
@@ -966,7 +943,7 @@ function boot() {
         if (saved && saved.token) {
             // Resume after a refresh/drop (falls back to the homepage if it's gone —
             // handled inside startMultiplayer).
-            startMultiplayer(gameId, saved.token, saved.seat, { resume: true, name: saved.name });
+            startMultiplayer(gameId, saved.token, saved.seat, { resume: true });
             return;
         }
     }
