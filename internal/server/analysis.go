@@ -144,6 +144,10 @@ func samePair(a, b [2]cribbage.Card) bool {
 // noise; the comparison that sets Optimal uses the raw delta, not this.
 func round4(v float64) float64 { return math.Round(v*1e4) / 1e4 }
 
+// round6 does the same for win probabilities, whose meaningful differences near
+// a lopsided endgame sit well below round4's resolution (e.g. 0.0002 vs 0.0021).
+func round6(v float64) float64 { return math.Round(v*1e6) / 1e6 }
+
 // handleGameAnalysis serves the post-game discard analysis for one finished game,
 // from the logged-in user's seat. It is strictly post-game: only games in the
 // permanent result store are visible here (a live, in-progress game has no Result

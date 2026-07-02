@@ -46,6 +46,14 @@ func init() {
 	farNeed[1] = 2 + maxPegD + 58 // dealer: heels + pegging + hand + crib
 }
 
+// InReach reports whether the win-probability objective is active at these
+// scores — i.e. whether RankDiscardsWin fills Win instead of deferring to the
+// points-EV order. Exported for the server's tools, which must tell "Win is
+// genuinely 0" apart from "the objective isn't active yet".
+func InReach(myScore, oppScore int, iAmDealer bool) bool {
+	return !farFromEnd(myScore, oppScore, iAmDealer)
+}
+
 // farFromEnd reports whether neither player can reach the target this deal, so
 // the win objective can defer to points EV.
 func farFromEnd(myScore, oppScore int, iAmDealer bool) bool {
