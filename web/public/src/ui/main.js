@@ -72,7 +72,7 @@ let state = fresh();
 // ---------- scaffold ----------
 const app = document.getElementById('app');
 const elFelt = h('div', { class: 'felt' });
-// The versus/results rail sits OUTSIDE the felt, to its left, so it never affects
+// The versus/results rail sits OUTSIDE the felt, to its RIGHT, so it never affects
 // the play area's width (the felt keeps its own size). render() fills it; it
 // collapses (via :empty) when there's no game yet.
 const elSide = h('div', { class: 'side-rail' });
@@ -98,7 +98,7 @@ quitButton.addEventListener('click', onQuit);
 // from the global wordmark — so the game view no longer needs its own title. The
 // Leave control is hidden for now, so the board's footer is dropped entirely
 // (quitButton stays referenced by onQuit/setChrome, just not mounted).
-app.append(h('div', { class: 'game-layout' }, elSide, elFelt));
+app.append(h('div', { class: 'game-layout' }, elFelt, elSide));
 // Mount the global site header (wordmark + auth/identity). It sits above #app and
 // never sets the page width, so the board layout is unaffected. We also mirror the
 // auth state locally: post-game discard analysis is account-scoped (it lives under
@@ -254,11 +254,16 @@ function stageEl() {
 function showHandEls(entry, isCrib, player) {
     const cards = sortCards(entry.cards).map((c) => cardEl(c));
     const starterEl = cardEl(entry.starter, { cls: 'show-starter' });
-    const lead = isCrib ? [h('span', { class: 'crib-tag' }, 'crib')] : [];
-    const kids = [...lead, ...cards, starterEl];
+    // A compact VERTICAL label ("Hand"/"Crib") beside the row (rotated via CSS), so
+    // both revealed hand rows and crib rows read consistently without a wide tag.
+    const label = h('div', { class: 'show-label' }, isCrib ? 'Crib' : 'Hand');
+    const kids = [label, ...cards, starterEl];
     if (entry.score) {
         kids.push(h('div', { class: 'show-score' }, String(entry.score.total)));
-        const explain = h('button', { class: 'explain-btn' }, 'Explain');
+        // The explain affordance is hidden until the row is hovered/focused (CSS).
+        // It sits in the row's lower-left and opens the existing breakdown overlay.
+        // Only counted rows get it (an uncounted row has no score to explain).
+        const explain = h('button', { class: 'show-explain' }, 'click to explain');
         explain.addEventListener('click', () => openExplain({ hand: entry.cards, starter: entry.starter, isCrib, player }));
         kids.push(explain);
     } else {
@@ -288,15 +293,15 @@ function resultsBox() {
     again.addEventListener('click', lastMode === 'mp' ? goNewOpen : goNewBot);
     const evalBtn = h('button', {}, 'Evaluate game');
     evalBtn.addEventListener('click', openEvaluation);
-    return h('div', { class: 'panel results-box ' + (o.won ? 'won' : 'lost') },
+    return h('div', { class: 'panel results-box' },
         h('div', { class: 'results-outcome' }, (o.won ? 'You win' : 'You lose') + skunkTxt),
         h('div', { class: 'results-score' }, `${o.my} – ${o.opp}`),
-        h('div', { class: 'results-actions' }, again, evalBtn),
-        h('a', { class: 'results-home', href: '/' }, 'Back to home'));
+        h('div', { class: 'results-actions' }, again, evalBtn));
 }
 function sidePanel() {
+    // Order matches the board's top/bottom: opponent (top) first, you (bottom) second.
     return h('div', { class: 'side-panel' },
-        h('div', { class: 'panel vs-box' }, playerRow(HUMAN), playerRow(BOT)),
+        h('div', { class: 'panel vs-box' }, playerRow(BOT), playerRow(HUMAN)),
         state.over ? resultsBox() : null);
 }
 // openEvaluation rates the discards of the game just played and shows the shared
@@ -394,8 +399,12 @@ function render() {
             youHand.append(cardEl(card));
         }
     }
-    // You (bottom): pegging area then hand. Actions always last.
-    const youSeat = h('div', { class: 'seat you' }, cribPeg(HUMAN), handArea(HUMAN, youHand), elControls);
+    // You (bottom): during the show, reveal the hand on top and the crib below it
+    // (matching the opponent's hand-then-crib order); off the show keep the pegging
+    // area above the hand as normal. Actions always last.
+    const youSeat = state.show
+        ? h('div', { class: 'seat you' }, handArea(HUMAN, youHand), cribPeg(HUMAN), elControls)
+        : h('div', { class: 'seat you' }, cribPeg(HUMAN), handArea(HUMAN, youHand), elControls);
     const inGame = state.dealer !== null || state.over;
     // The rail lives outside the felt (see scaffold); the felt holds only the play
     // area, so its width is unchanged whether or not the rail is showing.
@@ -458,7 +467,7 @@ function waitContinue(label = 'Continue') {
     return new Promise((res) => {
         const done = () => { resolveContinue = null; res(); };
         resolveContinue = done;
-        button(label + ' ▸', done);
+        button(label, done);
     });
 }
 window.addEventListener('keydown', (e) => {
