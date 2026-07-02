@@ -234,15 +234,21 @@ func (g *Game) leaderAfter(last Seat) Seat {
 func (g *Game) resolveShow() {
 	pone := other(g.dealer)
 
-	poneCards := g.played[pone]
-	if g.emitShow(pone, poneCards) {
-		return
-	}
-	dealerCards := g.played[g.dealer]
-	if g.emitShow(g.dealer, dealerCards) {
-		return
+	// The show counts pone's hand, then the dealer's, then the crib. If a player
+	// reaches the target partway through, the game is over and the remaining hands
+	// and crib are NEVER scored — but we still reveal them (face-up, scoreless) so
+	// both players can see every hand. `ended` tracks that short-circuit.
+	ended := g.emitShow(pone, g.played[pone])
+	if ended {
+		g.emit(showNotCounted(g.dealer, g.played[g.dealer], false))
+	} else {
+		ended = g.emitShow(g.dealer, g.played[g.dealer])
 	}
 
+	if ended {
+		g.emit(showNotCounted(g.dealer, g.crib, true))
+		return
+	}
 	cribRes := mustHandScore(g.crib, g.starter, true)
 	g.emit(CribShown{Cards: append([]cribbage.Card(nil), g.crib...), Score: cribRes})
 	if g.checkWin(g.dealer) {
@@ -251,6 +257,11 @@ func (g *Game) resolveShow() {
 
 	// no winner: rotate the deal and deal the next hand
 	g.dealHand(other(g.dealer))
+}
+
+// showNotCounted builds a scoreless reveal of an uncounted hand or crib.
+func showNotCounted(seat Seat, cards []cribbage.Card, isCrib bool) ShowNotCounted {
+	return ShowNotCounted{Seat: seat, Cards: append([]cribbage.Card(nil), cards...), IsCrib: isCrib}
 }
 
 func (g *Game) emitShow(seat Seat, cards []cribbage.Card) (won bool) {

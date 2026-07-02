@@ -18,4 +18,5 @@ func init() {
 	gob.Register(HandShown{})
 	gob.Register(CribShown{})
 	gob.Register(GameWon{})
+	gob.Register(ShowNotCounted{})
 }

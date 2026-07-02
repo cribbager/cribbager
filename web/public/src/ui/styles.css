@@ -288,6 +288,45 @@ html, body {
 .seat.you .pegged { align-items: flex-start; }
 .seat.you .deck { align-items: flex-start; }
 
+/* Table layout: the versus/results side panel on the left, the play area on the
+   right. The board keeps its own max-width; the flex row centers the pair. */
+.table-layout { display: flex; gap: var(--space-4); align-items: flex-start; justify-content: center; width: 100%; }
+.table-layout > .table-inner { margin: 0; }
+.side-panel { width: 240px; flex: none; display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* Versus box: one row per player — a coloured dot (you red, opponent blue, matching
+   the board pegs), the name, and the running score on the right. */
+.vs-box { padding: var(--space-3); display: flex; flex-direction: column; gap: 10px; }
+.vs-row { display: flex; align-items: center; gap: 8px; }
+.vs-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.vs-dot.you { background: var(--you); }
+.vs-dot.opp { background: var(--bot); }
+.vs-name { flex: 1; min-width: 0; font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-score { flex: none; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 17px; }
+
+/* Game-over results box — in-page, under the versus box (no modal). */
+.results-box { padding: var(--space-4); display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.results-box.won { border-top: 3px solid var(--accent); }
+.results-box.lost { border-top: 3px solid var(--muted); }
+.results-outcome { font-size: 18px; font-weight: 800; }
+.results-score { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
+.results-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.results-actions button { width: 100%; }
+.results-home { font-size: 13px; color: var(--btn); text-decoration: none; font-weight: 700; }
+.results-home:hover { text-decoration: underline; }
+
+/* The show reveals every hand in its own hand area (face up) and the crib in the
+   dealer's pegging area — cards + starter + that hand's own count sit inline. */
+.hand.show-hand, .pegged.show-crib { flex-wrap: wrap; align-items: center; gap: 8px; }
+.show-hand .show-starter, .show-crib .show-starter { margin-left: 16px; }
+.show-hand .show-score, .show-crib .show-score { margin-left: 12px; font-size: 24px; }
+.show-uncounted { margin-left: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+/* In-game "Evaluate game" overlay: the shared analysis view (.an-*) in a modal. */
+.eval-modal { text-align: left; max-width: 620px; width: 92vw; max-height: 82vh; overflow-y: auto; }
+.eval-modal h2 { text-align: center; }
+.eval-body { margin: 6px 0 14px; }
+
 /* the crib: a dashed card outline with "crib" inside (no faded card, no label) */
 .crib-slot {
   width: var(--card-w); height: var(--card-h); border-radius: 9px;
