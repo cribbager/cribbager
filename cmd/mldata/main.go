@@ -49,19 +49,28 @@ func main() {
 	flag.Parse()
 
 	var w io.Writer = os.Stdout
+	var f *os.File
 	if *out != "" {
-		f, err := os.Create(*out)
-		if err != nil {
+		var err error
+		if f, err = os.Create(*out); err != nil {
 			log.Fatal(err)
 		}
-		defer f.Close()
 		w = f
 	}
 	bw := bufio.NewWriter(w)
-	defer bw.Flush()
 
 	if err := generate(bw, *n, *seed); err != nil {
 		log.Fatal(err)
+	}
+	// Checked, not deferred: an unflushed buffer or failed close is silent
+	// data loss in a dataset file.
+	if err := bw.Flush(); err != nil {
+		log.Fatal(err)
+	}
+	if f != nil {
+		if err := f.Close(); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 

@@ -55,18 +55,24 @@ func main() {
 	}
 
 	var w io.Writer = os.Stdout
+	var f *os.File
 	if *out != "" {
-		f, err := os.Create(*out)
-		if err != nil {
+		var err error
+		if f, err = os.Create(*out); err != nil {
 			log.Fatal(err)
 		}
-		defer f.Close()
 		w = f
 	}
 
 	st, err := peg.Generate(*games, *seed, pols, w)
 	if err != nil {
 		log.Fatal(err)
+	}
+	// Checked, not deferred: a failed close is silent data loss in a dataset.
+	if f != nil {
+		if err := f.Close(); err != nil {
+			log.Fatal(err)
+		}
 	}
 	st.Finalize()
 	fmt.Fprintf(os.Stderr, "%d games, %d deals, %d decisions; pegging pts/deal: dealer %.2f, pone %.2f\n",

@@ -13,6 +13,7 @@
 package nn
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -78,14 +79,14 @@ func Load(r io.Reader) (*MLP, error) {
 	return &MLP{layers: f.Layers}, nil
 }
 
-// LoadFile is Load on a file path.
+// LoadFile is Load on a file path. Weights files are small (hundreds of KB),
+// so it reads whole-file — no open handle to manage.
 func LoadFile(path string) (*MLP, error) {
-	fh, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("nn: %w", err)
 	}
-	defer fh.Close()
-	return Load(fh)
+	return Load(bytes.NewReader(raw))
 }
 
 // InputSize is the length Forward's input must have.
