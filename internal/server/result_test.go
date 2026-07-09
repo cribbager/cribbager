@@ -23,7 +23,7 @@ import (
 func TestResultMetaGobRoundTrip(t *testing.T) {
 	m := resultMeta{
 		EngineVersion: game.EngineVersion,
-		Bots:          [2]BotInfo{{}, {Name: bot.DefaultName, Version: bot.Version}},
+		Bots:          [2]BotInfo{{}, {Name: bot.DefaultName, Version: bot.Champion().Version()}},
 	}
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(m); err != nil {
@@ -264,8 +264,8 @@ func TestGameOverRecordsResult(t *testing.T) {
 	if r.Bots[0] != (BotInfo{}) {
 		t.Errorf("human seat recorded a bot: %+v", r.Bots[0])
 	}
-	if r.Bots[1].Name != bot.DefaultName || r.Bots[1].Version != bot.Version {
-		t.Errorf("bot seat = %+v, want name=%q version=%q", r.Bots[1], bot.DefaultName, bot.Version)
+	if r.Bots[1].Name != bot.DefaultName || r.Bots[1].Version != bot.Champion().Version() {
+		t.Errorf("bot seat = %+v, want name=%q version=%q", r.Bots[1], bot.DefaultName, bot.Champion().Version())
 	}
 }
 
@@ -291,7 +291,7 @@ func TestPgResultStore(t *testing.T) {
 			t.Fatalf("save %s: %v", r.ID, err)
 		}
 	}
-	must(Result{ID: "a", PlayerIDs: [2]string{"p1", "p2"}, Names: [2]string{"P1", "P2"}, Scores: [2]int{121, 95}, Winner: 0, Events: []game.Event{}, EndedAt: now.Add(-2 * time.Minute), EngineVersion: game.EngineVersion, Bots: [2]BotInfo{{}, {Name: bot.DefaultName, Version: bot.Version}}})
+	must(Result{ID: "a", PlayerIDs: [2]string{"p1", "p2"}, Names: [2]string{"P1", "P2"}, Scores: [2]int{121, 95}, Winner: 0, Events: []game.Event{}, EndedAt: now.Add(-2 * time.Minute), EngineVersion: game.EngineVersion, Bots: [2]BotInfo{{}, {Name: bot.DefaultName, Version: bot.Champion().Version()}}})
 	must(Result{ID: "b", PlayerIDs: [2]string{"", "p1"}, Names: [2]string{"Guest", "P1"}, Scores: [2]int{121, 60}, Winner: 0, Events: []game.Event{}, EndedAt: now.Add(-1 * time.Minute)})
 	must(Result{ID: "a", PlayerIDs: [2]string{"p1", "p2"}, Names: [2]string{"X", "Y"}, Scores: [2]int{0, 0}, Winner: 1, Events: []game.Event{}, EndedAt: now}) // dup id -> ignored
 
@@ -310,7 +310,7 @@ func TestPgResultStore(t *testing.T) {
 	}
 	// Game "a" (games[1]) carried version metadata; it must survive the round-trip.
 	if a := games[1]; a.EngineVersion != game.EngineVersion ||
-		a.Bots[0] != (BotInfo{}) || a.Bots[1] != (BotInfo{Name: bot.DefaultName, Version: bot.Version}) {
+		a.Bots[0] != (BotInfo{}) || a.Bots[1] != (BotInfo{Name: bot.DefaultName, Version: bot.Champion().Version()}) {
 		t.Errorf("version metadata round-trip wrong: engine=%q bots=%+v", a.EngineVersion, a.Bots)
 	}
 	total, wins, err := rs.PlayerStats("p1")

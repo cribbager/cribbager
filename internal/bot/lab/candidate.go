@@ -18,8 +18,9 @@ import (
 //
 //	CHALLENGE=<name> go test ./internal/bot/lab -run ChallengerVsChampion -v
 //
-// If it wins by a margin whose 95% CI clears zero, fold the change into the
-// champion (internal/bot) and delete the challenger. If not, delete it anyway.
+// If it wins by a margin whose 95% CI clears zero, promote it into internal/bot
+// — either fold the change into the champion, or ship it as a new named
+// production bot alongside the champion. If it doesn't win, delete it.
 type candidate struct{ bot.Bot } // embeds the champion
 
 func init() {

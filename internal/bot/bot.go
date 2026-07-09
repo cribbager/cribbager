@@ -6,6 +6,7 @@ package bot
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 
 	"github.com/cribbager/cribbager/internal/cribbage"
 	"github.com/cribbager/cribbager/internal/game"
@@ -22,44 +23,52 @@ type Bot interface {
 	Play(v game.PlayerView) cribbage.Card
 }
 
-// DefaultName is the name of the shipped bot — the single opponent the product
-// plays against and the one we keep improving. It is a role name ("the
-// champion"), deliberately not tied to the current algorithm, so the
+// DefaultName is the name of the default opponent — the champion. Several named
+// production bots can coexist (see the registry below) and be selected per game;
+// when a caller doesn't pick one, this is the bot they get. It is a role name
+// ("the champion"), deliberately not tied to the current algorithm, so the
 // implementation can change without the name rippling through callers.
 const DefaultName = "champion"
 
-// Version is the shipped (champion) bot's algorithm version. Bump it whenever the
-// champion's logic changes, so finished games record which bot version played them.
-//
-// v2: calibrated pegging opponent model (discard-policy keep priors, own-throw
-// exclusion, live-series go inference) — promoted at +0.66 pts/pair over v1.
-// v3: win-probability objective for discard and play once either player is in
-// reach of the target — promoted at +0.011 wins/pair (full game) and +0.011
-// pooled over the positional fixtures over v2.
-const Version = "3"
-
-// Names lists the production bots: the champion (the default opponent) and the
-// legal-random baseline, kept as the evaluator's noise floor and the engine's
-// legality/termination move generator. Bots under development live in
-// internal/bot/lab, not here, so they can never reach the server.
-func Names() []string { return []string{"random", DefaultName} }
-
-// New builds a production bot by name with the given RNG (used by random for its
-// choices; the champion is deterministic and ignores it). Challengers under
-// development are built via internal/bot/lab, not here.
-func New(name string, rng *rand.Rand) (Bot, error) {
-	switch name {
-	case "random":
-		return NewRandom(rng), nil
-	case DefaultName:
-		return newChampion(), nil
-	default:
-		return nil, fmt.Errorf("bot: unknown bot %q (have %v)", name, Names())
-	}
+// registry is the table of PRODUCTION bots: the bots the server may seat and the
+// CLI may pick, each built by name with an RNG (random uses it; deterministic
+// bots ignore it). A new bot ships by adding a line here — that no longer means
+// replacing the champion; production bots coexist, and DefaultName is merely the
+// one seated by default. Bots under development live in internal/bot/lab and are
+// absent here, so a challenger can never reach the server until it is promoted.
+var registry = map[string]func(rng *rand.Rand) Bot{
+	"random":    func(rng *rand.Rand) Bot { return NewRandom(rng) },
+	DefaultName: func(*rand.Rand) Bot { return newChampion() },
 }
 
-// Champion returns the shipped bot. Callers that just want "the opponent" should
-// use this instead of hardcoding a name.
+// Names lists the production bots, sorted, so the set is stable and printable
+// (e.g. in an unknown-bot error or a GET /bots listing).
+func Names() []string {
+	out := make([]string, 0, len(registry))
+	for n := range registry {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Valid reports whether name is a production bot (one the server may seat).
+func Valid(name string) bool { _, ok := registry[name]; return ok }
+
+// New builds a production bot by name with the given RNG (used by random for its
+// choices; the champion is deterministic and ignores it). An unknown name is an
+// error — callers validating external input should surface it as a 4xx.
+// Challengers under development are built via internal/bot/lab, not here.
+func New(name string, rng *rand.Rand) (Bot, error) {
+	make, ok := registry[name]
+	if !ok {
+		return nil, fmt.Errorf("bot: unknown bot %q (have %v)", name, Names())
+	}
+	return make(rng), nil
+}
+
+// Champion returns the default opponent. Callers that just want "the default
+// bot" should use this instead of hardcoding a name.
 func Champion() Bot { return newChampion() }
 
 // hand6 converts a six-card view hand into a fixed array for the evaluators.
