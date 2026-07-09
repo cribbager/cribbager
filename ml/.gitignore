@@ -1,0 +1,8 @@
+# Virtualenv and Python caches
+.venv/
+__pycache__/
+*.egg-info/
+
+# Generated training data and run artifacts (regenerate with cmd/mldata)
+data/
+runs/
