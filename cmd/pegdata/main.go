@@ -5,7 +5,8 @@
 // minus the opponent's, to the end of the deal).
 //
 // Usage: pegdata [-games n] [-seed s] [-policy random|champion|net]
-//                [-weights file] [-epsilon e] [-out file]
+//
+//	[-weights file] [-epsilon e] [-out file]
 package main
 
 import (
