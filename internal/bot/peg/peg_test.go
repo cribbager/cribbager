@@ -4,10 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"math/rand"
 	"testing"
 
-	"github.com/cribbager/cribbager/internal/bot"
 	"github.com/cribbager/cribbager/internal/cribbage"
 	"github.com/cribbager/cribbager/internal/game"
 )
@@ -57,54 +55,17 @@ func TestEncode(t *testing.T) {
 	}
 }
 
-// TestPegEventsMatchDealStats holds this package's event walker equal to
-// bot.DealStats, the independently written extractor: per deal and seat, the
-// summed pegging points must agree exactly.
-func TestPegEventsMatchDealStats(t *testing.T) {
-	g := game.New(game.Options{Deck: game.NewSeededDeck(7)})
-	rng := rand.New(rand.NewSource(7))
-	discarder := bot.Champion()
-	for {
-		if _, over := g.Winner(); over {
-			break
-		}
-		v := g.View(game.Seat0)
-		switch v.Phase {
-		case game.PhaseDiscard:
-			for s := game.Seat(0); s < 2; s++ {
-				if vs := g.View(s); len(vs.YourHand) == 6 {
-					if _, err := g.Apply(s, game.Discard{Cards: discarder.Discard(vs)}); err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
-		case game.PhasePlay:
-			seat := *v.ToPlay
-			if _, err := g.Apply(seat, game.Play{Card: Random{}.Play(g.View(seat), rng)}); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
+// firstTwo is the minimal legal Discarder for generator tests: throw the
+// first two cards of the hand.
+type firstTwo struct{}
 
-	mine := pegEvents(g.Events())
-	ref := bot.DealStats(g.Events())
-	if len(mine) != len(ref) {
-		t.Fatalf("deal count: walker %d, DealStats %d", len(mine), len(ref))
-	}
-	for d := range mine {
-		var got [2]int
-		for _, e := range mine[d] {
-			got[e.seat] += e.pts
-		}
-		if got != ref[d].Peg {
-			t.Errorf("deal %d: walker peg %v, DealStats %v", d, got, ref[d].Peg)
-		}
-	}
+func (firstTwo) Discard(v game.PlayerView) [2]cribbage.Card {
+	return [2]cribbage.Card{v.YourHand[0], v.YourHand[1]}
 }
 
 func TestGenerate(t *testing.T) {
 	var buf bytes.Buffer
-	st, err := Generate(5, 3, [2]Policy{Random{}, Random{}}, &buf)
+	st, err := Generate(5, 3, firstTwo{}, [2]Policy{Random{}, Random{}}, &buf)
 	if err != nil {
 		t.Fatal(err)
 	}

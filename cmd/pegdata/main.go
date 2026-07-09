@@ -16,7 +16,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/cribbager/cribbager/internal/bot/lab/peg"
+	"github.com/cribbager/cribbager/internal/bot"
+	"github.com/cribbager/cribbager/internal/bot/peg"
 	"github.com/cribbager/cribbager/internal/nn"
 )
 
@@ -64,7 +65,7 @@ func main() {
 		w = f
 	}
 
-	st, err := peg.Generate(*games, *seed, pols, w)
+	st, err := peg.Generate(*games, *seed, bot.Champion(), pols, w)
 	if err != nil {
 		log.Fatal(err)
 	}

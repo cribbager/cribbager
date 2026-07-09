@@ -24,9 +24,19 @@ model, v3 added the win-probability objective.
 
 ## Picking an opponent (multiple production bots)
 
-`internal/bot` is a small registry of **named production bots**. Two ship today —
-`champion` (the default, described here) and `random` (a legal-random baseline) —
-and the registry is built to hold more as they graduate from the lab (see the
+`internal/bot` is a small registry of **named production bots**. Three ship today:
+
+- `champion` — the default, described in the rest of this document.
+- `ml` — the machine-learned bot: it discards exactly like the champion (same
+  win-probability evaluator) but pegs with a small neural network trained by
+  self-play reinforcement learning. The network (128→128→128→13, ~35k weights,
+  embedded in the binary) was promoted after beating the champion's pegging by
+  +0.70 pts/pair (95% CI +0.46..+0.95) over 10,000 duplicate deal-pairs on
+  deals disjoint from its training, with no measurable regression on the
+  positional fixtures.
+- `random` — a legal-random baseline.
+
+The registry is built to hold more as they graduate from the lab (see the
 last section). Each bot reports its own `Name()` and `Version()`, and both are
 recorded with every finished game, so a stored game always knows exactly which
 opponent — by name and algorithm version — played it.

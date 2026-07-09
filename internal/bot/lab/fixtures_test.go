@@ -59,11 +59,19 @@ func TestChallengerFixtures(t *testing.T) {
 			t.Fatalf("PAIRS: %q is not a number", v)
 		}
 	}
+	// SEED offsets the deal streams. As with the main gate: a trained
+	// challenger must be judged on deals disjoint from its training seeds.
+	seed := int64(1)
+	if v := os.Getenv("SEED"); v != "" {
+		if _, err := fmt.Sscan(v, &seed); err != nil {
+			t.Fatalf("SEED: %q is not a number", v)
+		}
+	}
 
 	// Pool the fixtures as one big paired sample for the overall verdict.
 	var pooledDiff, pooledVar float64
 	for fi, f := range fixtures {
-		c, err := bot.CompareFrom(cand, bot.Champion(), pairs, int64(1+fi*pairs), f.start)
+		c, err := bot.CompareFrom(cand, bot.Champion(), pairs, seed+int64(fi*pairs), f.start)
 		if err != nil {
 			t.Fatalf("%s: %v", f.name, err)
 		}
