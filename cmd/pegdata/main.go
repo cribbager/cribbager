@@ -22,26 +22,35 @@ import (
 func main() {
 	games := flag.Int("games", 20000, "number of self-play games")
 	seed := flag.Int64("seed", 1, "RNG seed")
-	policy := flag.String("policy", "random", "behavior policy: random, champion, or net")
-	weights := flag.String("weights", "", "weights file (required for -policy net)")
-	epsilon := flag.Float64("epsilon", 0.2, "exploration rate for -policy net")
+	policy := flag.String("policy", "random", "seat-0 behavior policy: random, champion, or net")
+	opponent := flag.String("opponent", "same", "seat-1 policy: same, random, champion, or net")
+	weights := flag.String("weights", "", "weights file (required for a net policy)")
+	epsilon := flag.Float64("epsilon", 0.2, "exploration rate for -policy net (opponent net plays greedy)")
 	out := flag.String("out", "", "output file (default stdout)")
 	flag.Parse()
 
-	var pol peg.Policy
-	switch *policy {
-	case "random":
-		pol = peg.Random{}
-	case "champion":
-		pol = peg.Champion{}
-	case "net":
-		m, err := nn.LoadFile(*weights)
-		if err != nil {
-			log.Fatal(err)
+	build := func(name string, eps float64) peg.Policy {
+		switch name {
+		case "random":
+			return peg.Random{}
+		case "champion":
+			return peg.Champion{}
+		case "net":
+			m, err := nn.LoadFile(*weights)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return peg.Net{M: m, Epsilon: eps}
+		default:
+			log.Fatalf("unknown policy %q", name)
+			return nil
 		}
-		pol = peg.Net{M: m, Epsilon: *epsilon}
-	default:
-		log.Fatalf("unknown policy %q", *policy)
+	}
+	pols := [2]peg.Policy{build(*policy, *epsilon), nil}
+	if *opponent == "same" {
+		pols[1] = pols[0]
+	} else {
+		pols[1] = build(*opponent, 0)
 	}
 
 	var w io.Writer = os.Stdout
@@ -54,7 +63,7 @@ func main() {
 		w = f
 	}
 
-	st, err := peg.Generate(*games, *seed, pol, w)
+	st, err := peg.Generate(*games, *seed, pols, w)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -47,12 +47,16 @@ type pegEvent struct {
 	isPlay bool // a CardPlayed (decisions align 1:1 with these); else GoAwarded
 }
 
-// Generate self-plays games full games — both seats discard like the champion
-// and peg with pol — and writes one Row per non-forced pegging decision, for
-// both seats. Returns are computed afterwards from the engine's event log,
-// the same source DealStats trusts: pegging is exactly the CardPlayed and
-// GoAwarded points, so shows and heels can't leak into the reward.
-func Generate(games int, seed int64, pol Policy, w io.Writer) (Stats, error) {
+// Generate plays full games — both seats discard like the champion and seat s
+// pegs with pols[s] — and writes one Row per non-forced pegging decision, for
+// both seats. Identical policies give pure self-play; a champion opponent in
+// one seat gives targeted training data ("what happens against the actual
+// opponent"), and the champion's own decisions are logged too — expert
+// demonstrations with observed returns. Returns are computed afterwards from
+// the engine's event log, the same source DealStats trusts: pegging is
+// exactly the CardPlayed and GoAwarded points, so shows and heels can't leak
+// into the reward.
+func Generate(games int, seed int64, pols [2]Policy, w io.Writer) (Stats, error) {
 	bw := bufio.NewWriterSize(w, 1<<20)
 	defer bw.Flush()
 	enc := json.NewEncoder(bw)
@@ -86,7 +90,7 @@ func Generate(games int, seed int64, pol Policy, w io.Writer) (Stats, error) {
 			case game.PhasePlay:
 				seat := *v.ToPlay
 				vs := g.View(seat)
-				card := pol.Play(vs, rng)
+				card := pols[seat].Play(vs, rng)
 				if n := distinctRanks(vs); n >= 2 {
 					pending = append(pending, decision{
 						deal: deal, play: playIdx, seat: seat,

@@ -46,8 +46,17 @@ func TestChallengerVsChampion(t *testing.T) {
 			t.Fatalf("PAIRS: %q is not a number", v)
 		}
 	}
+	// SEED picks the deal stream. Trained challengers MUST be gated on a seed
+	// range disjoint from their training deals — a learner that has seen the
+	// gate's exact deals is being examined on questions from its homework.
+	seed := int64(1)
+	if v := os.Getenv("SEED"); v != "" {
+		if _, err := fmt.Sscan(v, &seed); err != nil {
+			t.Fatalf("SEED: %q is not a number", v)
+		}
+	}
 
-	c, err := bot.Compare(cand, bot.Champion(), pairs, 1)
+	c, err := bot.Compare(cand, bot.Champion(), pairs, seed)
 	if err != nil {
 		t.Fatal(err)
 	}

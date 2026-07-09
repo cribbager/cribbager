@@ -104,7 +104,7 @@ func TestPegEventsMatchDealStats(t *testing.T) {
 
 func TestGenerate(t *testing.T) {
 	var buf bytes.Buffer
-	st, err := Generate(5, 3, Random{}, &buf)
+	st, err := Generate(5, 3, [2]Policy{Random{}, Random{}}, &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
