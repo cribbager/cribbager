@@ -57,8 +57,9 @@ type pegEvent struct {
 // exactly the CardPlayed and GoAwarded points, so shows and heels can't leak
 // into the reward.
 func Generate(games int, seed int64, pols [2]Policy, w io.Writer) (Stats, error) {
+	// No deferred flush: the final return flushes, and error paths abandon
+	// their partial output — callers treat any error as fatal to the run.
 	bw := bufio.NewWriterSize(w, 1<<20)
-	defer bw.Flush()
 	enc := json.NewEncoder(bw)
 
 	discarder := bot.Champion()
