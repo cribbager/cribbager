@@ -16,3 +16,5 @@ node_modules/
 
 # research notes kept locally for now, not published (revisit how to handle these)
 docs/research/
+/mldata
+/pegdata

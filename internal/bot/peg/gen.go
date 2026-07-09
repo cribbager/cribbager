@@ -7,7 +7,7 @@ import (
 	"io"
 	"math/rand"
 
-	"github.com/cribbager/cribbager/internal/bot"
+	"github.com/cribbager/cribbager/internal/cribbage"
 	"github.com/cribbager/cribbager/internal/game"
 )
 
@@ -24,6 +24,13 @@ type Row struct {
 	A    int       `json:"a"`
 	G    float64   `json:"g"`
 	N    int       `json:"n"`
+}
+
+// Discarder chooses crib throws for the generated games. It is the subset of
+// bot.Bot Generate needs; this package deliberately does not import
+// internal/bot (the production ML bot there imports this package).
+type Discarder interface {
+	Discard(v game.PlayerView) [2]cribbage.Card
 }
 
 // Stats summarizes a generation run.
@@ -47,22 +54,27 @@ type pegEvent struct {
 	isPlay bool // a CardPlayed (decisions align 1:1 with these); else GoAwarded
 }
 
-// Generate plays full games — both seats discard like the champion and seat s
-// pegs with pols[s] — and writes one Row per non-forced pegging decision, for
-// both seats. Identical policies give pure self-play; a champion opponent in
-// one seat gives targeted training data ("what happens against the actual
+// dealPeg is one deal's pegging record: who dealt, and every pegging score in
+// chronological order.
+type dealPeg struct {
+	dealer game.Seat
+	events []pegEvent
+}
+
+// Generate plays full games — both seats discard with discard and seat s pegs
+// with pols[s] — and writes one Row per non-forced pegging decision, for both
+// seats. Identical policies give pure self-play; a champion opponent in one
+// seat gives targeted training data ("what happens against the actual
 // opponent"), and the champion's own decisions are logged too — expert
 // demonstrations with observed returns. Returns are computed afterwards from
-// the engine's event log, the same source DealStats trusts: pegging is
-// exactly the CardPlayed and GoAwarded points, so shows and heels can't leak
-// into the reward.
-func Generate(games int, seed int64, pols [2]Policy, w io.Writer) (Stats, error) {
+// the engine's event log: pegging is exactly the CardPlayed and GoAwarded
+// points, so shows and heels can't leak into the reward.
+func Generate(games int, seed int64, discard Discarder, pols [2]Policy, w io.Writer) (Stats, error) {
 	// No deferred flush: the final return flushes, and error paths abandon
 	// their partial output — callers treat any error as fatal to the run.
 	bw := bufio.NewWriterSize(w, 1<<20)
 	enc := json.NewEncoder(bw)
 
-	discarder := bot.Champion()
 	var st Stats
 	for gi := 0; gi < games; gi++ {
 		rng := rand.New(rand.NewSource(seed ^ int64(gi)*0x9e3779b9))
@@ -84,7 +96,7 @@ func Generate(games int, seed int64, pols [2]Policy, w io.Writer) (Stats, error)
 					if len(vs.YourHand) != 6 {
 						continue
 					}
-					if _, err := g.Apply(s, game.Discard{Cards: discarder.Discard(vs)}); err != nil {
+					if _, err := g.Apply(s, game.Discard{Cards: discard.Discard(vs)}); err != nil {
 						return st, fmt.Errorf("game %d discard: %w", gi, err)
 					}
 				}
@@ -109,9 +121,18 @@ func Generate(games int, seed int64, pols [2]Policy, w io.Writer) (Stats, error)
 
 		deals := pegEvents(g.Events())
 		st.Games++
-		tallyStats(&st, g.Events())
+		st.Deals += len(deals)
+		for _, d := range deals {
+			for _, e := range d.events {
+				if e.seat == d.dealer {
+					st.PegPerDeal[0] += float64(e.pts)
+				} else {
+					st.PegPerDeal[1] += float64(e.pts)
+				}
+			}
+		}
 		for _, d := range pending {
-			evs := deals[d.deal]
+			evs := deals[d.deal].events
 			ret, plays := 0.0, 0
 			for _, e := range evs {
 				if e.isPlay {
@@ -148,31 +169,36 @@ func distinctRanks(v game.PlayerView) int {
 	return n
 }
 
-// pegEvents extracts each deal's pegging scores, in order, from the event log.
-func pegEvents(events []game.Event) [][]pegEvent {
-	var deals [][]pegEvent
+// pegEvents extracts each deal's pegging record from the event log.
+func pegEvents(events []game.Event) []dealPeg {
+	var deals []dealPeg
 	for _, e := range events {
 		switch e := e.(type) {
 		case game.HandDealt:
-			deals = append(deals, nil)
+			deals = append(deals, dealPeg{dealer: e.Dealer})
 		case game.CardPlayed:
-			deals[len(deals)-1] = append(deals[len(deals)-1], pegEvent{e.Seat, e.Score.Total, true})
+			d := &deals[len(deals)-1]
+			d.events = append(d.events, pegEvent{e.Seat, e.Score.Total, true})
 		case game.GoAwarded:
-			deals[len(deals)-1] = append(deals[len(deals)-1], pegEvent{e.Seat, e.Points, false})
+			d := &deals[len(deals)-1]
+			d.events = append(d.events, pegEvent{e.Seat, e.Points, false})
 		}
 	}
 	return deals
 }
 
-// tallyStats accumulates per-role pegging averages using bot.DealStats, the
-// independently-written extractor — keeping two readers of the same event log
-// honest about what "pegging points" means.
-func tallyStats(st *Stats, events []game.Event) {
-	for _, d := range bot.DealStats(events) {
-		st.Deals++
-		st.PegPerDeal[0] += float64(d.Peg[d.Dealer])
-		st.PegPerDeal[1] += float64(d.Peg[1-d.Dealer])
+// PegTotals returns each deal's pegging points per seat from a game's event
+// log — the same attribution Generate uses for returns, exported so tests and
+// tools can hold it against independent extractors (bot.DealStats).
+func PegTotals(events []game.Event) [][2]int {
+	deals := pegEvents(events)
+	out := make([][2]int, len(deals))
+	for i, d := range deals {
+		for _, e := range d.events {
+			out[i][e.seat] += e.pts
+		}
 	}
+	return out
 }
 
 // Finalize converts sums to averages once generation is done.

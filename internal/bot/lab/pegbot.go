@@ -4,7 +4,7 @@ import (
 	"math/rand"
 
 	"github.com/cribbager/cribbager/internal/bot"
-	"github.com/cribbager/cribbager/internal/bot/lab/peg"
+	"github.com/cribbager/cribbager/internal/bot/peg"
 	"github.com/cribbager/cribbager/internal/cribbage"
 	"github.com/cribbager/cribbager/internal/game"
 	"github.com/cribbager/cribbager/internal/nn"
@@ -50,4 +50,10 @@ func init() {
 			rng: rand.New(rand.NewSource(3)), name: "ml-peg", version: "1",
 		}
 	})
+	// A third variant, ml-hybrid (net pegging far from the target, champion
+	// win-aware pegging once eval.InReach), was tried here as the "safer"
+	// promotion candidate and DELETED per lab convention after losing to pure
+	// net pegging on both instruments: +0.28 pts/pair vs +0.70, with no
+	// fixture regression for the pure net to justify the handoff. See
+	// docs/research/ml-bot chapter 6; git history has the code.
 }

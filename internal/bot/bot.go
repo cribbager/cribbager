@@ -39,6 +39,7 @@ const DefaultName = "champion"
 var registry = map[string]func(rng *rand.Rand) Bot{
 	"random":    func(rng *rand.Rand) Bot { return NewRandom(rng) },
 	DefaultName: func(*rand.Rand) Bot { return newChampion() },
+	"ml":        func(*rand.Rand) Bot { return newML() },
 }
 
 // Names lists the production bots, sorted, so the set is stable and printable
