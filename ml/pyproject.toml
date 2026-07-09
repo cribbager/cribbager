@@ -1,0 +1,16 @@
+[project]
+name = "cribml"
+version = "0.1.0"
+description = "Training side of the cribbager ML bot: PyTorch models exported to Go inference (internal/nn)"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "torch>=2.5",
+    "numpy>=2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cribml"]
