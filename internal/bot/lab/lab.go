@@ -1,13 +1,15 @@
-// Package lab holds challenger bots under active development and is the place to
-// pit them against the shipped champion (internal/bot). It is imported only by
-// its own tests — never by the client or server — so a challenger can never
-// become the shipped opponent.
+// Package lab holds bots under active development and is the place to pit them
+// against the production bots (internal/bot). It is imported only by its own
+// tests — never by the client or server — so a challenger can never be seated in
+// a real game until it is promoted into internal/bot.
 //
-// The workflow is a one-way ratchet: build a challenger here, beat the champion
-// in a duplicate-deal comparison (bot.Compare, run from the go test in
-// challenger_test.go), then fold the winning change into internal/bot's champion
-// and DELETE the challenger. Losers are deleted too. There is only ever one
-// shipped bot; git history is the archive of what was tried.
+// Challengers may be long-lived: an experiment (e.g. an ML bot trained over
+// weeks) can live here, registered alongside others, while it is developed and
+// measured against a rival with bot.Compare (run from the go test in
+// challenger_test.go). When one is ready it is PROMOTED into internal/bot — which
+// may mean replacing the champion, or shipping as a new named production bot that
+// coexists with the champion (now the default opponent, not the only one).
+// Abandoned experiments are deleted; git history is the archive of what was tried.
 package lab
 
 import (

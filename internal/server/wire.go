@@ -231,11 +231,23 @@ type createRequest struct {
 	Mode   string `json:"mode"` // "bot" or "open"
 	Target int    `json:"target"`
 	Name   string `json:"name,omitempty"`
+	// Bot names the production bot to seat as the opponent in "bot" mode. Empty
+	// means the default (bot.DefaultName, the champion). An unknown name is a 400.
+	// Ignored for "open" games (there is no bot). The valid names are listed by
+	// GET /bots.
+	Bot string `json:"bot,omitempty"`
 	// Public, for an open game, lists it in the lobby (GET /lobby) for anyone to
 	// join ("Create a game"). It defaults to false, so an open game with no flag
 	// stays private/link-only ("Challenge a friend") — back-compatible. Ignored for
 	// bot games (never listed).
 	Public bool `json:"public,omitempty"`
+}
+
+// botsResponse is the GET /bots payload: the production bots a "bot" game may be
+// created against, and which one is used when the create request omits a name.
+type botsResponse struct {
+	Bots    []string `json:"bots"`
+	Default string   `json:"default"`
 }
 
 type createResponse struct {

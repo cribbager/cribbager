@@ -42,29 +42,40 @@ func (b *randomBot) Play(v game.PlayerView) cribbage.Card {
 	return v.LegalPlays[b.rng.Intn(len(v.LegalPlays))]
 }
 
-// --- Champion: the shipped bot -----------------------------------------------
+// --- Champion: the default opponent ------------------------------------------
 
-// champion is THE bot — the single opponent the product plays against and the
-// one we keep improving. Both decisions maximize WIN PROBABILITY: away from the
-// target that provably reduces to exact point EV (crib-aware discard tables,
-// one-ply net-EV pegging against the calibrated opponent belief); once either
-// player is in reach of 121, holds and plays are ranked by P(win) — risky when
-// behind, safe when ahead, with no hand-written rules. Fully deterministic —
-// same view in, same move out — so it takes no RNG.
+// championVersion is the champion's algorithm version, recorded with every
+// finished game it plays. Bump it whenever the champion's logic changes.
 //
-// To improve it: build a challenger in internal/bot/lab, beat this in a
-// duplicate-deal comparison (bot.Compare, run as a go test — points margin for
-// point-EV changes, paired win-difference plus the positional fixtures for
-// score-aware ones), then fold the winning change in here and delete the
-// challenger. There is only ever one champion.
+// v2: calibrated pegging opponent model (discard-policy keep priors, own-throw
+// exclusion, live-series go inference) — promoted at +0.66 pts/pair over v1.
+// v3: win-probability objective for discard and play once either player is in
+// reach of the target — promoted at +0.011 wins/pair (full game) and +0.011
+// pooled over the positional fixtures over v2.
+const championVersion = "3"
+
+// champion is the default opponent — the strongest production bot and the one
+// seated when a caller doesn't pick another. Both decisions maximize WIN
+// PROBABILITY: away from the target that provably reduces to exact point EV
+// (crib-aware discard tables, one-ply net-EV pegging against the calibrated
+// opponent belief); once either player is in reach of 121, holds and plays are
+// ranked by P(win) — risky when behind, safe when ahead, with no hand-written
+// rules. Fully deterministic — same view in, same move out — so it takes no RNG.
+//
+// To improve it (or grow a new production bot): build a challenger in
+// internal/bot/lab, beat a rival in a duplicate-deal comparison (bot.Compare,
+// run as a go test — points margin for point-EV changes, paired win-difference
+// plus the positional fixtures for score-aware ones), then promote it into this
+// package. Promotion may replace the champion or register alongside it as a new
+// named production bot; challengers are no longer necessarily short-lived.
 type champion struct{}
 
 func newChampion() Bot { return champion{} }
 
 func (champion) Name() string { return DefaultName }
 
-// Version reports the shipped bot's algorithm version (see Version).
-func (champion) Version() string { return Version }
+// Version reports the champion's algorithm version (see championVersion).
+func (champion) Version() string { return championVersion }
 
 func (champion) Discard(v game.PlayerView) [2]cribbage.Card {
 	d, _ := eval.BestDiscardWin(hand6(v.YourHand), v.Dealer == v.You, v.Scores[v.You], v.Scores[1-v.You])

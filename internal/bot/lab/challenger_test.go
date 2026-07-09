@@ -71,9 +71,9 @@ func verdict(c bot.Comparison) string {
 	winNeg := c.WinDiffCIHi < 0
 	switch {
 	case c.MarginCILo > 0 && !winNeg:
-		return "\n  → challenger is BETTER on points (Margin CI clears zero, wins not worse) — promote, then delete the challenger."
+		return "\n  → challenger is BETTER on points (Margin CI clears zero, wins not worse) — promote it into internal/bot (replace the champion or ship it as a new named bot)."
 	case c.WinDiffCILo > 0 && !marginNeg:
-		return "\n  → challenger is BETTER on wins (WinDiff CI clears zero, points not worse) — promote, then delete the challenger."
+		return "\n  → challenger is BETTER on wins (WinDiff CI clears zero, points not worse) — promote it into internal/bot (replace the champion or ship it as a new named bot)."
 	case c.WinDiffCILo > 0 && marginNeg:
 		return "\n  → challenger WINS MORE but scores significantly fewer points — expected for score-aware play; promote if the point loss is understood."
 	case marginNeg || winNeg:

@@ -18,9 +18,29 @@ Three properties frame everything below:
   which is where "take risks when behind, play safe when ahead" comes from,
   with no hand-written rules.
 
-The champion is versioned (`bot.Version`, recorded with every finished game):
+The champion is versioned (its `Version()`, recorded with every finished game):
 v1 was point-EV with a uniform opponent model, v2 added the calibrated opponent
 model, v3 added the win-probability objective.
+
+## Picking an opponent (multiple production bots)
+
+`internal/bot` is a small registry of **named production bots**. Two ship today —
+`champion` (the default, described here) and `random` (a legal-random baseline) —
+and the registry is built to hold more as they graduate from the lab (see the
+last section). Each bot reports its own `Name()` and `Version()`, and both are
+recorded with every finished game, so a stored game always knows exactly which
+opponent — by name and algorithm version — played it.
+
+Callers select a bot **by name**:
+
+- **Server / API.** `POST /games` with `"mode":"bot"` accepts an optional
+  `"bot":"<name>"`; omit it for the champion. An unknown name is a `400`. The
+  available names (and the default) are listed by `GET /bots`. There is no web-UI
+  picker — selection is an API/CLI affair.
+- **CLI.** `cribbager play --bot <name>` builds the bot via `bot.New`.
+
+Names are validated against the production registry, so lab challengers (below)
+can never be seated in a real game.
 
 ## Discarding: which two cards go to the crib
 
@@ -166,13 +186,20 @@ Each accepted deliberately, tested where possible:
 - The opponent's hand and pegging distributions are self-play marginals, not
   conditioned on the current hand.
 
-## How the champion changes
+## How bots change and grow
 
-There is only ever one shipped bot. Improvements are developed as challengers
-in `internal/bot/lab` and must beat the champion over thousands of duplicate
-deals (same decks, seats swapped, so card luck cancels) before being folded in:
-point-EV changes gate on the paired **points margin** CI clearing zero;
-score-aware changes gate on the paired **win-difference** CI plus positional
-fixtures started at endgame scores — because a bot that correctly trades points
-for wins looks *worse* on points. Losers are deleted; git history is the
-archive. See `internal/bot/compare.go` and `internal/bot/lab/`.
+New bots are developed as challengers in `internal/bot/lab` and must beat a rival
+over thousands of duplicate deals (same decks, seats swapped, so card luck
+cancels) before being promoted: point-EV changes gate on the paired **points
+margin** CI clearing zero; score-aware changes gate on the paired **win-difference**
+CI plus positional fixtures started at endgame scores — because a bot that
+correctly trades points for wins looks *worse* on points. See
+`internal/bot/compare.go` and `internal/bot/lab/`.
+
+Promotion is no longer a one-way ratchet with a single survivor. A winning
+challenger is moved into `internal/bot` and added to the production registry;
+that can mean **replacing the champion** (a strictly-better default) or
+**shipping alongside it** as a new named production bot. Challengers may also be
+long-lived — an experiment (e.g. an ML bot trained over weeks) can live in the
+lab, registered next to others, while it is measured. Abandoned experiments are
+deleted; git history is the archive.

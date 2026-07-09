@@ -16,6 +16,51 @@ func mk(t *testing.T, name string, seed int64) Bot {
 	return b
 }
 
+// TestNewBuildsEveryProductionBot checks that every name Names() advertises is
+// actually buildable by New (and reports that same name back), so the registry
+// and the advertised list can't drift apart.
+func TestNewBuildsEveryProductionBot(t *testing.T) {
+	names := Names()
+	if len(names) == 0 {
+		t.Fatal("Names() is empty")
+	}
+	for _, name := range names {
+		if !Valid(name) {
+			t.Errorf("Valid(%q) = false for a name Names() lists", name)
+		}
+		b, err := New(name, rand.New(rand.NewSource(1)))
+		if err != nil {
+			t.Errorf("New(%q): %v", name, err)
+			continue
+		}
+		if b.Name() != name {
+			t.Errorf("New(%q).Name() = %q", name, b.Name())
+		}
+		if b.Version() == "" {
+			t.Errorf("bot %q reports an empty version", name)
+		}
+	}
+	// The default opponent must be one of the production bots.
+	if !Valid(DefaultName) {
+		t.Errorf("DefaultName %q is not a production bot", DefaultName)
+	}
+}
+
+// TestNewUnknownBotRejected checks that an unrecognized name is a clean error
+// (not a nil bot or a panic), so a bad request can be surfaced as a 4xx.
+func TestNewUnknownBotRejected(t *testing.T) {
+	b, err := New("nope", rand.New(rand.NewSource(1)))
+	if err == nil {
+		t.Fatal("New with an unknown name returned no error")
+	}
+	if b != nil {
+		t.Errorf("New with an unknown name returned a non-nil bot: %v", b)
+	}
+	if Valid("nope") {
+		t.Error("Valid reported an unknown name as valid")
+	}
+}
+
 // TestLegalityAndTermination plays every bot pairing over many games. PlayGame
 // returns an error if a bot ever produces a move the engine rejects, so a clean
 // run proves bots always play legally — and every game must end with a winner at

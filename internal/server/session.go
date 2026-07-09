@@ -214,6 +214,7 @@ func (s *session) record() Record {
 		PlayerIDs: s.playerIDs,
 		Left:      s.left,
 		Bots:      [2]bool{s.bots[game.Seat0] != nil, s.bots[game.Seat1] != nil},
+		BotNames:  [2]string{botName(s.bots[game.Seat0]), botName(s.bots[game.Seat1])},
 		Public:    s.public,
 		CreatedAt: s.createdAt,
 		LastSeen:  s.lastSeen,
@@ -222,7 +223,9 @@ func (s *session) record() Record {
 
 // sessionFromRecord rebuilds a session from a persisted record. Subscribers start
 // empty (clients reconnect and presence is rebuilt) and a bot seat gets a fresh
-// champion; subCnt is the server-wide subscriber gauge to attach.
+// instance of the SAME production bot it was seated with (by recorded name; a
+// legacy row with no name, or an unknown name, falls back to the default so the
+// game still plays). subCnt is the server-wide subscriber gauge to attach.
 func sessionFromRecord(r Record, subCnt *atomic.Int64) *session {
 	s := &session{
 		id:        r.ID,
@@ -238,10 +241,23 @@ func sessionFromRecord(r Record, subCnt *atomic.Int64) *session {
 	}
 	for seat := game.Seat(0); seat < 2; seat++ {
 		if r.Bots[seat] {
-			s.bots[seat] = bot.Champion()
+			name := r.BotNames[seat]
+			if name == "" {
+				name = bot.DefaultName // legacy row written before bot names were stored
+			}
+			s.bots[seat] = newBot(name)
 		}
 	}
 	return s
+}
+
+// botName returns a seated bot's production name, or "" for an empty (human)
+// seat, so a session's bot identity can be persisted and re-seated on restore.
+func botName(b bot.Bot) string {
+	if b == nil {
+		return ""
+	}
+	return b.Name()
 }
 
 // --- registry ----------------------------------------------------------------

@@ -211,6 +211,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /readyz", s.handleReady)
 	mux.HandleFunc("GET /stats", s.handleStats)
 	mux.HandleFunc("GET /lobby", s.handleLobby)
+	mux.HandleFunc("GET /bots", s.handleBots)
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("POST /auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
@@ -334,6 +335,14 @@ func (s *Server) handleLobby(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, lobbyResponse{Games: games})
 }
 
+// handleBots lists the production bots a "bot" game can be created against, and
+// the default used when the create request omits a name. It reads a static
+// in-process table, so it needs no auth and no locking — a client (CLI or web)
+// can call it to populate a bot picker or validate a --bot flag.
+func (s *Server) handleBots(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, botsResponse{Bots: bot.Names(), Default: bot.DefaultName})
+}
+
 // noCache makes the browser revalidate static assets on every load. The web
 // client has no build step, so without this the browser keeps serving a stale
 // cached ES module after an edit — and "edit a file and just refresh" silently
@@ -412,10 +421,19 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Mode {
 	case "bot":
-		// The product ships exactly one bot — the champion. There is no opponent
-		// selector: other bots (random, lab challengers) are CLI/test-only and
-		// never served here.
-		sess.bots[game.Seat1] = bot.Champion()
+		// The opponent is a named production bot (GET /bots lists them); an empty
+		// name defaults to the champion. An unknown name is a clean 400 — lab
+		// challengers are never seatable here. Validate before registering the
+		// session so a bad request costs nothing.
+		name := req.Bot
+		if name == "" {
+			name = bot.DefaultName
+		}
+		if !bot.Valid(name) {
+			writeErr(w, http.StatusBadRequest, fmt.Sprintf("unknown bot %q; valid bots: %v", name, bot.Names()))
+			return
+		}
+		sess.bots[game.Seat1] = newBot(name)
 		sess.mu.Lock()
 		sess.driveBots() // let the bot take any opening action (e.g. its discard)
 		sess.mu.Unlock()
