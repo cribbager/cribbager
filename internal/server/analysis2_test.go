@@ -123,6 +123,16 @@ func assertResponseInvariants(t *testing.T, resp gameAnalysisV2Response, events 
 		if d.StartScores != cum {
 			t.Errorf("deal %d start_scores = %v, want %v (DealStats accumulation)", k, d.StartScores, cum)
 		}
+		// The engine caps the winner's board score at the target on the winning
+		// award, but no HandDealt ever follows a win, so a full-value event sum
+		// (this accumulation and analysis2's own) can never put a deal's
+		// start_scores at or past the target. These games end mid-final-deal,
+		// making that the interesting case.
+		for s := 0; s < 2; s++ {
+			if d.StartScores[s] >= 121 {
+				t.Errorf("deal %d start_scores[%d] = %d, at or past the target", k, s, d.StartScores[s])
+			}
+		}
 		if d.Dealer != int(stats[k].Dealer) {
 			t.Errorf("deal %d dealer = %d, want %d", k, d.Dealer, stats[k].Dealer)
 		}

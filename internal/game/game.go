@@ -363,7 +363,9 @@ func (g *Game) emit(e Event) {
 }
 
 // reduce is the single place state mutates. It must be a pure function of
-// (current state, event) so the live state always equals the fold of the log.
+// (current state, event) — plus the immutable target, which caps scores in
+// addPoints — so the live state always equals the fold of the log under the
+// same target.
 func (g *Game) reduce(e Event) {
 	switch e := e.(type) {
 	case CutForDeal:
@@ -397,7 +399,7 @@ func (g *Game) reduce(e Event) {
 	case StarterCut:
 		g.starter = e.Card
 		g.hasStarter = true
-		g.scores[g.dealer] += e.Heels
+		g.addPoints(g.dealer, e.Heels)
 		g.phase = PhasePlay
 
 	case CardPlayed:
@@ -405,14 +407,14 @@ func (g *Game) reduce(e Event) {
 		g.played[e.Seat] = append(g.played[e.Seat], e.Card)
 		g.pile = append(g.pile, e.Card)
 		g.count += e.Card.Rank.PipValue()
-		g.scores[e.Seat] += e.Score.Total
+		g.addPoints(e.Seat, e.Score.Total)
 		g.lastPlayer = e.Seat
 
 	case Pass:
 		g.gone[e.Seat] = true
 
 	case GoAwarded:
-		g.scores[e.Seat] += e.Points
+		g.addPoints(e.Seat, e.Points)
 
 	case SeriesReset:
 		g.pile = nil
@@ -421,14 +423,33 @@ func (g *Game) reduce(e Event) {
 		g.lastPlayer = other(e.Leader) // so turn() yields the leader
 
 	case HandShown:
-		g.scores[e.Seat] += e.Score.Total
+		g.addPoints(e.Seat, e.Score.Total)
 
 	case CribShown:
-		g.scores[g.dealer] += e.Score.Total
+		g.addPoints(g.dealer, e.Score.Total)
 
 	case GameWon:
 		g.winner = int(e.Seat)
 		g.phase = PhaseComplete
+	}
+}
+
+// addPoints applies a scoring award to the seat's score, stopping the score at
+// the target: in real cribbage you announce the full count ("fifteen two, a
+// pair is four") but can only peg to the last hole. Events therefore always
+// carry the natural card values — a 12-point hand records 12 even when 1 point
+// wins — and the clamp lives here, at score application, so the fold of the
+// log (live play, Restore, ReconstructPlays) yields board scores that never
+// pass the target. A stored final score reads exactly the target for the
+// winner.
+//
+// Folds that don't know the target (target == 0, e.g. ReconstructPlays) apply
+// awards unclamped. That cannot change any reconstructed decision: a clamp
+// only ever fires on the game-winning award, and no decision follows a win.
+func (g *Game) addPoints(seat Seat, pts int) {
+	g.scores[seat] += pts
+	if g.target > 0 && g.scores[seat] > g.target {
+		g.scores[seat] = g.target
 	}
 }
 
