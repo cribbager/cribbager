@@ -11,7 +11,14 @@
 // total is ehand + crib_ev, the pone's is ehand − crib_ev — which halves the
 // file and puts the dealer/pone symmetry where the trainer can see it.
 //
-// Usage: mldata [-n hands] [-seed s] [-out file]
+// A second mode (chapter 7) trades exactness for completeness:
+// -mode outcomes plays full games (champion discards with ε-random
+// exploration, production ML pegging) and labels each CHOSEN split with the
+// deal's realized net points — see outcomes.go.
+//
+// Usage: mldata [-mode exact|outcomes] [-n hands|games] [-seed s]
+//
+//	[-epsilon e] [-out file]
 package main
 
 import (
@@ -43,8 +50,10 @@ type row struct {
 }
 
 func main() {
-	n := flag.Int("n", 10000, "number of hands to deal")
+	n := flag.Int("n", 10000, "hands to deal (exact mode) or games to play (outcomes mode)")
 	seed := flag.Int64("seed", 1, "RNG seed, so a dataset is reproducible")
+	mode := flag.String("mode", "exact", "exact (evaluator-labeled splits) or outcomes (realized deal points)")
+	epsilon := flag.Float64("epsilon", 0.25, "outcomes mode: fraction of uniformly random splits (exploration)")
 	out := flag.String("out", "", "output file (default stdout)")
 	flag.Parse()
 
@@ -59,7 +68,16 @@ func main() {
 	}
 	bw := bufio.NewWriter(w)
 
-	if err := generate(bw, *n, *seed); err != nil {
+	var err error
+	switch *mode {
+	case "exact":
+		err = generate(bw, *n, *seed)
+	case "outcomes":
+		err = generateOutcomes(bw, *n, *seed, *epsilon)
+	default:
+		log.Fatalf("unknown mode %q", *mode)
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 	// Checked, not deferred: an unflushed buffer or failed close is silent

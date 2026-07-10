@@ -2,6 +2,7 @@ package lab
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -55,8 +56,22 @@ func TestChallengerVsChampion(t *testing.T) {
 			t.Fatalf("SEED: %q is not a number", v)
 		}
 	}
+	// BASELINE swaps the opponent (default: the champion). Naming another bot
+	// isolates one decision: e.g. BASELINE=ml pits net discards + ml pegging
+	// against champion discards + ml pegging, so the margin measures the
+	// discard alone. Lab names are looked up first, then production names.
+	base := bot.Champion()
+	if v := os.Getenv("BASELINE"); v != "" {
+		if b, ok := New(v); ok {
+			base = b
+		} else if b, err := bot.New(v, rand.New(rand.NewSource(9))); err == nil {
+			base = b
+		} else {
+			t.Fatalf("BASELINE %q: not a lab challenger (%v) or production bot (%v)", v, Names(), bot.Names())
+		}
+	}
 
-	c, err := bot.Compare(cand, bot.Champion(), pairs, seed)
+	c, err := bot.Compare(cand, base, pairs, seed)
 	if err != nil {
 		t.Fatal(err)
 	}
