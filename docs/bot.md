@@ -26,8 +26,11 @@ model, v3 added the win-probability objective.
 
 `internal/bot` is a small registry of **named production bots**. Three ship today:
 
-- `champion` — the default, described in the rest of this document.
-- `ml` — the machine-learned bot. It pegs with a small neural network trained
+- `champion` — the hand-built reference bot, described in the rest of this
+  document. It was the default opponent until the ML bot beat it on both
+  promotion instruments; it remains the yardstick the lab measures
+  challengers against.
+- `ml` — **the default opponent**. It pegs with a small neural network trained
   by self-play reinforcement learning (promoted at +0.70 pts/pair, 95% CI
   +0.46..+0.95, over the champion's pegging on 10,000 duplicate deal-pairs
   disjoint from its training), and discards by the exact expected points of
@@ -46,7 +49,7 @@ opponent — by name and algorithm version — played it.
 Callers select a bot **by name**:
 
 - **Server / API.** `POST /games` with `"mode":"bot"` accepts an optional
-  `"bot":"<name>"`; omit it for the champion. An unknown name is a `400`. The
+  `"bot":"<name>"`; omit it for the default (`ml`). An unknown name is a `400`. The
   available names (and the default) are listed by `GET /bots`. There is no web-UI
   picker — selection is an API/CLI affair.
 - **CLI.** `cribbager play --bot <name>` builds the bot via `bot.New`.

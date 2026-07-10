@@ -264,8 +264,9 @@ func TestGameOverRecordsResult(t *testing.T) {
 	if r.Bots[0] != (BotInfo{}) {
 		t.Errorf("human seat recorded a bot: %+v", r.Bots[0])
 	}
-	if r.Bots[1].Name != bot.DefaultName || r.Bots[1].Version != bot.Champion().Version() {
-		t.Errorf("bot seat = %+v, want name=%q version=%q", r.Bots[1], bot.DefaultName, bot.Champion().Version())
+	def := newBot(bot.DefaultName)
+	if r.Bots[1].Name != bot.DefaultName || r.Bots[1].Version != def.Version() {
+		t.Errorf("bot seat = %+v, want name=%q version=%q", r.Bots[1], bot.DefaultName, def.Version())
 	}
 }
 

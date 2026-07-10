@@ -42,7 +42,7 @@ func (b *randomBot) Play(v game.PlayerView) cribbage.Card {
 	return v.LegalPlays[b.rng.Intn(len(v.LegalPlays))]
 }
 
-// --- Champion: the default opponent ------------------------------------------
+// --- Champion: the hand-built reference bot -----------------------------------
 
 // championVersion is the champion's algorithm version, recorded with every
 // finished game it plays. Bump it whenever the champion's logic changes.
@@ -54,8 +54,9 @@ func (b *randomBot) Play(v game.PlayerView) cribbage.Card {
 // pooled over the positional fixtures over v2.
 const championVersion = "3"
 
-// champion is the default opponent — the strongest production bot and the one
-// seated when a caller doesn't pick another. Both decisions maximize WIN
+// champion is the hand-built reference bot: the yardstick the lab's gates
+// measure challengers against, and the default opponent until ml v2 beat it
+// on both promotion instruments. Both decisions maximize WIN
 // PROBABILITY: away from the target that provably reduces to exact point EV
 // (crib-aware discard tables, one-ply net-EV pegging against the calibrated
 // opponent belief); once either player is in reach of 121, holds and plays are
@@ -72,7 +73,7 @@ type champion struct{}
 
 func newChampion() Bot { return champion{} }
 
-func (champion) Name() string { return DefaultName }
+func (champion) Name() string { return ChampionName }
 
 // Version reports the champion's algorithm version (see championVersion).
 func (champion) Version() string { return championVersion }
