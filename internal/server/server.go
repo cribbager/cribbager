@@ -229,6 +229,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /games/{id}/join", s.handleJoin)
 	mux.HandleFunc("GET /games/{id}", s.handleSnapshot)
 	mux.HandleFunc("GET /games/{id}/analysis", s.handleGameAnalysisV2)
+	mux.HandleFunc("GET /games/{id}/replay", s.handleGameReplayV2)
 	mux.HandleFunc("POST /games/{id}/actions", s.handleAction)
 	mux.HandleFunc("POST /games/{id}/abandon", s.handleAbandon)
 	mux.HandleFunc("GET /games/{id}/stream", s.handleStream)

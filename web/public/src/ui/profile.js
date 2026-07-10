@@ -109,10 +109,11 @@ function historyPanel(games) {
     }
     const list = h('div', { class: 'home-history-list' });
     for (const g of games) {
-        // These rows are the signed-in user's own finished games, so the post-game
-        // discard analysis (A8) always applies — link straight to its view by id.
+        // These rows are the signed-in user's own finished games, so the unified
+        // replay+analysis page (A10) always applies — link straight to it by id
+        // (the login cookie authorizes it, no token needed).
         const analyze = g.id
-            ? h('a', { class: 'home-history-analyze', href: '/analyze.html?game=' + encodeURIComponent(g.id) }, 'Analyze')
+            ? h('a', { class: 'home-history-analyze', href: '/analyze.html?game=' + encodeURIComponent(g.id) }, 'Evaluate')
             : null;
         list.append(h('div', { class: 'home-history-row ' + (g.won ? 'won' : 'lost') },
             h('span', { class: 'home-history-badge' }, g.won ? 'W' : 'L'),

@@ -1,7 +1,8 @@
-// Pure reducer for the stored-game replay view (A2). It folds a finished game's
-// event log (GET /users/me/games/{id}/replay) into an array of immutable
-// "spectator" frames — one per step — that the replay page steps through with
-// FULL visibility (both hands, the crib, the opponent's discards).
+// Pure reducer for the stored-game replay board (A2, now the board half of the
+// unified evaluate page). It folds a finished game's event log (GET
+// /games/{id}/replay) into an array of immutable "spectator" frames — one per
+// step — that the page steps through with FULL visibility (both hands, the
+// crib, the opponent's discards).
 //
 // The event vocabulary is the SAME type/field set the live SSE stream uses, so
 // this mirrors main.js's translate()/onEvent() (the reference reducer) — but
@@ -43,16 +44,18 @@ function removeCards(hand, cards) {
   return out;
 }
 
-// labelFor builds the human-readable step label, e.g. "Hand 2 — pegging".
+// labelFor builds the human-readable step label, e.g. "Deal 2 — pegging".
+// "Deal" (not "Hand") matches the evaluate page's rail and the analysis
+// payload's vocabulary.
 function labelFor(s) {
   switch (s.phase) {
     case 'start': return 'Start';
     case 'cut': return 'Cut for deal';
-    case 'discard': return `Hand ${s.hand} — the deal`;
-    case 'play': return `Hand ${s.hand} — pegging`;
-    case 'show': return `Hand ${s.hand} — the show`;
+    case 'discard': return `Deal ${s.hand} — the discard`;
+    case 'play': return `Deal ${s.hand} — pegging`;
+    case 'show': return `Deal ${s.hand} — the show`;
     case 'done': return 'Game over';
-    default: return `Hand ${s.hand}`;
+    default: return `Deal ${s.hand}`;
   }
 }
 
@@ -210,29 +213,6 @@ export function handStarts(frames) {
   frames.forEach((f, i) => {
     if (f.hand > 0 && f.hand !== seen) { out.push({ hand: f.hand, index: i }); seen = f.hand; }
   });
-  return out;
-}
-
-/**
- * Associate A3 discard verdicts with the replay's hands.
- *
- * The analysis payload's `discards` array is in hand order (one entry per hand
- * the requesting user discarded in), so its i-th entry corresponds to the i-th
- * hand of the game. We align it against `handStarts()` — which lists the hands in
- * the same order — keying each verdict by that hand's 1-based number, so the
- * replay can look up "the verdict for the hand I'm currently viewing" directly.
- *
- * Only the requesting user's seat is graded by A3; the returned object therefore
- * never describes the opponent's discards. Missing/empty analysis yields {}.
- *
- * @param {{ discards?: object[] }|null|undefined} analysis the A3 payload
- * @param {ReadonlyArray<{hand:number,index:number}>} starts handStarts(frames)
- * @returns {Object<number, object>} hand number (1-based) → verdict
- */
-export function verdictsByHand(analysis, starts) {
-  const out = {};
-  const discards = analysis && Array.isArray(analysis.discards) ? analysis.discards : [];
-  (starts ?? []).forEach((s, i) => { if (discards[i]) out[s.hand] = discards[i]; });
   return out;
 }
 

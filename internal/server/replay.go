@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+
+	"github.com/cribbager/cribbager/internal/game"
 )
 
 // Post-game replay. Like the analysis endpoint, this operates ONLY on a finished,
@@ -51,18 +53,41 @@ func (s *Server) handleGameReplay(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "game not found")
 		return
 	}
+	writeJSON(w, http.StatusOK, replayResponseFor(res.ID, participantGameFromResult(res, 0)))
+}
 
+// handleGameReplayV2 serves the SAME full-visibility replay to ANY participant
+// of a finished game — including guests — over the same two credentials the v2
+// analysis endpoint accepts (per-game player token as Bearer, or the login
+// cookie) with the same 401/404/409 semantics: they share
+// finishedGameSubject, so the unified replay+analysis page can fetch both
+// halves with one credential. The response shape is identical to
+// GET /users/me/games/{id}/replay. Path: GET /games/{id}/replay.
+func (s *Server) handleGameReplayV2(w http.ResponseWriter, r *http.Request) {
+	pg, ok := s.finishedGameSubject(w, r)
+	if !ok {
+		return // finishedGameSubject wrote the error
+	}
+	writeJSON(w, http.StatusOK, replayResponseFor(r.PathValue("id"), pg))
+}
+
+// replayResponseFor assembles the wire replay for a resolved finished game.
+// Both replay endpoints build their response here, so the login-only and
+// participant-credential paths can never drift in shape. The requester's seat
+// is irrelevant: a replay shows the whole game.
+func replayResponseFor(id string, pg participantGame) gameReplayResponse {
 	resp := gameReplayResponse{
-		GameID: res.ID,
-		Winner: res.Winner,
-		// Result does not store the game's score target, so replay reports the
-		// standard 121-point game. LIMITATION: a game played to a non-default target
-		// (e.g. 61) will be mislabeled here until Result records the target.
+		GameID: id,
+		Winner: pg.winner,
+		// Neither the session nor the Result records the game's score target, so
+		// replay reports the standard 121-point game. LIMITATION: a game played to
+		// a non-default target (e.g. 61) will be mislabeled here until the target
+		// is recorded.
 		Target: 121,
-		Events: projectReplayEvents(res.Events, 0),
+		Events: projectReplayEvents(pg.events, 0),
 	}
-	for i := 0; i < 2; i++ {
-		resp.Seats[i] = replaySeat{Name: res.Names[i], Bot: res.Bots[i].Name != ""}
+	for seat := game.Seat0; seat < 2; seat++ {
+		resp.Seats[seat] = replaySeat{Name: pg.names[seat], Bot: pg.bots[seat]}
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return resp
 }

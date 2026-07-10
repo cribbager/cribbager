@@ -686,11 +686,11 @@ func distinctRanks(cards []cribbage.Card) int {
 // finished game, from the requester's own seat. See the contract and access
 // rules at the top of this file. Path: GET /games/{id}/analysis.
 func (s *Server) handleGameAnalysisV2(w http.ResponseWriter, r *http.Request) {
-	events, seat, ok := s.analysisSubject(w, r)
+	pg, ok := s.finishedGameSubject(w, r)
 	if !ok {
-		return // analysisSubject wrote the error
+		return // finishedGameSubject wrote the error
 	}
-	resp, err := analyzeGameV2(r.PathValue("id"), seat, events, analysisEngines())
+	resp, err := analyzeGameV2(r.PathValue("id"), pg.seat, pg.events, analysisEngines())
 	if err != nil {
 		// A stored log that fails reconstruction is corrupt — a server-side
 		// problem, never the caller's.
@@ -700,16 +700,43 @@ func (s *Server) handleGameAnalysisV2(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// analysisSubject authenticates the requester as a participant of the
-// finished game and returns its event log plus the requester's seat, writing
-// the error response itself otherwise. Two credentials are accepted, tried in
-// order:
+// participantGame is one finished game resolved through a participant
+// credential (finishedGameSubject): its full event log, the requester's seat,
+// and the roster facts the replay response needs. Whichever credential
+// resolved it — the live session or the stored Result — the fields carry the
+// same values, so the two paths serve identical responses.
+type participantGame struct {
+	events []game.Event
+	seat   game.Seat // the requester's seat
+	names  [2]string // display names ("" for an unnamed guest / bot seat)
+	bots   [2]bool   // true where a bot held the seat
+	winner int       // the winning seat
+}
+
+// participantGameFromResult projects a stored Result for the given requester
+// seat.
+func participantGameFromResult(res Result, seat game.Seat) participantGame {
+	return participantGame{
+		events: res.Events,
+		seat:   seat,
+		names:  res.Names,
+		bots:   [2]bool{res.Bots[0].Name != "", res.Bots[1].Name != ""},
+		winner: res.Winner,
+	}
+}
+
+// finishedGameSubject authenticates the requester as a participant of the
+// finished game and returns it (event log, requester seat, roster), writing
+// the error response itself otherwise. It backs both post-game endpoints that
+// admit guests — GET /games/{id}/analysis and GET /games/{id}/replay — so
+// their access semantics can never drift apart. Two credentials are accepted,
+// tried in order:
 //
 //  1. The per-game player token (Bearer) against the live session registry —
 //     the credential the participant played with, so it works for guests too.
-//     A valid token on an unfinished game is a 409 (analysis is post-game
-//     only); the token proves participation, so unlike the paths below this
-//     is allowed to acknowledge the game exists.
+//     A valid token on an unfinished game is a 409 (analysis/replay are
+//     post-game only); the token proves participation, so unlike the paths
+//     below this is allowed to acknowledge the game exists.
 //  2. The login session (cookie) against the stored Result's player ids —
 //     the durable path for registered users, exactly like v1 and replay.
 //
@@ -717,7 +744,7 @@ func (s *Server) handleGameAnalysisV2(w http.ResponseWriter, r *http.Request) {
 // replay, the endpoint never reveals that a game the caller can't see exists
 // (this includes spectators and non-participants). A request with no
 // credential at all gets a 401.
-func (s *Server) analysisSubject(w http.ResponseWriter, r *http.Request) ([]game.Event, game.Seat, bool) {
+func (s *Server) finishedGameSubject(w http.ResponseWriter, r *http.Request) (participantGame, bool) {
 	id := r.PathValue("id")
 
 	token := bearer(r)
@@ -725,17 +752,23 @@ func (s *Server) analysisSubject(w http.ResponseWriter, r *http.Request) ([]game
 		if sess, ok := s.reg.get(id); ok {
 			if seat, ok := sess.seatFor(token); ok {
 				sess.mu.Lock()
-				_, over := sess.game.Winner()
-				var events []game.Event
+				winner, over := sess.game.Winner()
+				var pg participantGame
 				if over {
-					events = sess.game.Events() // Events copies the log
+					pg = participantGame{
+						events: sess.game.Events(), // Events copies the log
+						seat:   seat,
+						names:  sess.names,
+						bots:   [2]bool{sess.bots[0] != nil, sess.bots[1] != nil},
+						winner: int(winner),
+					}
 				}
 				sess.mu.Unlock()
 				if !over {
 					writeErr(w, http.StatusConflict, "game not finished")
-					return nil, 0, false
+					return participantGame{}, false
 				}
-				return events, seat, true
+				return pg, true
 			}
 		}
 	}
@@ -744,27 +777,27 @@ func (s *Server) analysisSubject(w http.ResponseWriter, r *http.Request) ([]game
 		res, found, err := s.results.ResultByID(id)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "could not load game")
-			return nil, 0, false
+			return participantGame{}, false
 		}
 		if found && involves(res, u.ID) {
 			seat := game.Seat0
 			if res.PlayerIDs[1] == u.ID {
 				seat = game.Seat1
 			}
-			return res.Events, seat, true
+			return participantGameFromResult(res, seat), true
 		}
 		// Logged in, but this game isn't theirs (or doesn't exist): 404 either
 		// way, so the endpoint never reveals that a game it can't show exists.
 		writeErr(w, http.StatusNotFound, "game not found")
-		return nil, 0, false
+		return participantGame{}, false
 	}
 
 	if token != "" {
 		// A token was presented but it opens no seat in this game (stale,
 		// foreign, or the game is gone): same non-revealing 404.
 		writeErr(w, http.StatusNotFound, "game not found")
-		return nil, 0, false
+		return participantGame{}, false
 	}
 	writeErr(w, http.StatusUnauthorized, "not authenticated")
-	return nil, 0, false
+	return participantGame{}, false
 }

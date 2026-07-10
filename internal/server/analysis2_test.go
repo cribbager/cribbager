@@ -256,6 +256,42 @@ func TestAnalysisV2EngineOptimality(t *testing.T) {
 	assertEngineOptimal(t, got2, "champion")
 }
 
+// playOutGuestGame drives a live bot game to completion over HTTP, making
+// champion moves for the token's seat (the server drives the bot seat). Used
+// by the guest-access tests for both post-game endpoints, so the guest's own
+// moves are champion-optimal by construction.
+func playOutGuestGame(t *testing.T, c *authedClient, id, token string) {
+	t.Helper()
+	me := bot.Champion()
+	for i := 0; ; i++ {
+		if i > 500 {
+			t.Fatal("game did not finish within 500 actions")
+		}
+		r, body := c.do("GET", "/games/"+id, token, nil)
+		if r.StatusCode != http.StatusOK {
+			t.Fatalf("snapshot: %d %s", r.StatusCode, body)
+		}
+		v := decode[game.PlayerView](t, body)
+		if v.Winner != nil {
+			return
+		}
+		var act actionRequest
+		switch {
+		case v.Phase == game.PhaseDiscard && len(v.YourHand) == 6:
+			cards := me.Discard(v)
+			act = actionRequest{Type: "discard", Cards: cards[:]}
+		case v.Phase == game.PhasePlay && v.ToPlay != nil && *v.ToPlay == v.You:
+			card := me.Play(v)
+			act = actionRequest{Type: "play", Card: &card}
+		default:
+			t.Fatalf("unexpected snapshot state: phase %v", v.Phase)
+		}
+		if r, body := c.do("POST", "/games/"+id+"/actions", token, act); r.StatusCode != http.StatusOK {
+			t.Fatalf("action: %d %s", r.StatusCode, body)
+		}
+	}
+}
+
 // TestAnalysisV2GuestAccess plays a live bot game end-to-end over HTTP as a
 // pure guest (no account, no cookie) making champion moves, then fetches the
 // analysis with only the player token. This is the NU3 path: a fully-guest
@@ -279,34 +315,7 @@ func TestAnalysisV2GuestAccess(t *testing.T) {
 	}
 
 	// Play the game out with champion moves; the server drives the bot seat.
-	me := bot.Champion()
-	for i := 0; ; i++ {
-		if i > 500 {
-			t.Fatal("game did not finish within 500 actions")
-		}
-		r, body := c.do("GET", "/games/"+id, token, nil)
-		if r.StatusCode != http.StatusOK {
-			t.Fatalf("snapshot: %d %s", r.StatusCode, body)
-		}
-		v := decode[game.PlayerView](t, body)
-		if v.Winner != nil {
-			break
-		}
-		var act actionRequest
-		switch {
-		case v.Phase == game.PhaseDiscard && len(v.YourHand) == 6:
-			cards := me.Discard(v)
-			act = actionRequest{Type: "discard", Cards: cards[:]}
-		case v.Phase == game.PhasePlay && v.ToPlay != nil && *v.ToPlay == v.You:
-			card := me.Play(v)
-			act = actionRequest{Type: "play", Card: &card}
-		default:
-			t.Fatalf("unexpected snapshot state: phase %v", v.Phase)
-		}
-		if r, body := c.do("POST", "/games/"+id+"/actions", token, act); r.StatusCode != http.StatusOK {
-			t.Fatalf("action: %d %s", r.StatusCode, body)
-		}
-	}
+	playOutGuestGame(t, c, id, token)
 
 	// A fully-guest game must NOT be in the permanent result store — the
 	// live-session token path is what serves it.
