@@ -72,23 +72,51 @@ func newML() Bot {
 func (ml) Name() string    { return "ml" }
 func (ml) Version() string { return mlVersion }
 
-// Discard ranks all 15 splits by exact expected points (hand + signed crib)
-// plus the net's predicted pegging differential for the keep, and throws the
-// argmax. Deliberately score-blind: the positional fixtures measured this
-// AHEAD of the win-probability discard on endgame wins — pegging-aware keeps
-// are worth more than the win-walk's hold-independent pegging approximation.
-func (b ml) Discard(v game.PlayerView) [2]cribbage.Card {
-	h := v.YourHand
-	dealer := v.Dealer == v.You
-	best, pick := math.Inf(-1), [2]cribbage.Card{}
-	for _, rd := range eval.RankDiscards(hand6(h), dealer) {
+// discardValues computes the ml value of every split: exact expected points
+// (hand + signed crib) plus the net's predicted pegging differential for the
+// keep. Returned in eval.RankDiscards order. It is the single source of truth
+// for the discard value — both the live decision (Discard) and post-game
+// analysis (MLAnalyzer.DiscardValues) read it, so they can never disagree.
+func (b ml) discardValues(h [6]cribbage.Card, dealer bool) []MLDiscardValue {
+	ranked := eval.RankDiscards(h, dealer)
+	out := make([]MLDiscardValue, len(ranked))
+	for i, rd := range ranked {
 		cards := append(append([]cribbage.Card{}, rd.Keep[:]...), rd.Discard[:]...)
-		val := rd.Score + b.discardNet.Forward(DiscardInput(cards, 4, 5, dealer))[0]
-		if val > best {
-			best, pick = val, rd.Discard
+		out[i] = MLDiscardValue{
+			Discard: rd.Discard,
+			Keep:    rd.Keep,
+			Value:   rd.Score + b.discardNet.Forward(DiscardInput(cards, 4, 5, dealer))[0],
+		}
+	}
+	return out
+}
+
+// Discard throws the split with the best ml value (see discardValues).
+// Deliberately score-blind: the positional fixtures measured this AHEAD of
+// the win-probability discard on endgame wins — pegging-aware keeps are worth
+// more than the win-walk's hold-independent pegging approximation.
+func (b ml) Discard(v game.PlayerView) [2]cribbage.Card {
+	best, pick := math.Inf(-1), [2]cribbage.Card{}
+	for _, dv := range b.discardValues(hand6(v.YourHand), v.Dealer == v.You) {
+		if dv.Value > best {
+			best, pick = dv.Value, dv.Discard
 		}
 	}
 	return pick
+}
+
+// playValues computes the Q-network's value for each legal play, in
+// v.LegalPlays order: one forward pass, then each card reads its rank's
+// output — exactly the values peg.Net's greedy policy takes the argmax of
+// (first maximum in LegalPlays order). Exposed to post-game analysis via
+// MLAnalyzer.PlayValues.
+func (b ml) playValues(v game.PlayerView) []MLPlayValue {
+	q := b.pegNet.Forward(peg.Encode(v))
+	out := make([]MLPlayValue, len(v.LegalPlays))
+	for i, c := range v.LegalPlays {
+		out[i] = MLPlayValue{Card: c, Value: q[int(c.Rank)-1]}
+	}
+	return out
 }
 
 func (b ml) Play(v game.PlayerView) cribbage.Card {
