@@ -74,6 +74,8 @@ func main() {
 		err = generate(bw, *n, *seed)
 	case "outcomes":
 		err = generateOutcomes(bw, *n, *seed, *epsilon)
+	case "win":
+		err = generateWin(bw, *n, *seed, *epsilon)
 	default:
 		log.Fatalf("unknown mode %q", *mode)
 	}

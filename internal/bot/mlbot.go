@@ -121,3 +121,32 @@ func DiscardInput(hand []cribbage.Card, di, dj int, dealer bool) []float64 {
 	}
 	return x
 }
+
+// The win-target discard encoding (docs/research/ml-bot chapter 8): the base
+// split encoding plus the game position and the split's exact expected
+// points. Scores enter both as scalars and as coarse one-hot buckets so the
+// net can carve the win surface into regions (par-hole curvature) without
+// having to bend scalars alone; the exact Score feature means the net never
+// spends capacity rediscovering point values (chapter 7's lesson as feature
+// engineering). Encoded ONLY here in Go — the generator emits ready vectors,
+// training consumes them opaquely, inference reuses this function.
+const (
+	winDiscardDims    = 128
+	winScoreScalarOff = 105 // my/121, opp/121
+	winMyBucketOff    = 107 // 10 buckets of my score
+	winOppBucketOff   = 117 // 10 buckets of opponent score
+	winSplitScoreOff  = 127 // the split's exact expected points / 30
+)
+
+// DiscardInputWin builds the position-aware discard input: hand/split as in
+// DiscardInput, plus the decider's and opponent's scores and the split's
+// exact expected points (eval.RankDiscards Score).
+func DiscardInputWin(hand []cribbage.Card, di, dj int, dealer bool, my, opp int, score float64) []float64 {
+	x := append(DiscardInput(hand, di, dj, dealer), make([]float64, winDiscardDims-discardInputDim)...)
+	x[winScoreScalarOff] = float64(my) / 121
+	x[winScoreScalarOff+1] = float64(opp) / 121
+	x[winMyBucketOff+min(my*10/121, 9)] = 1
+	x[winOppBucketOff+min(opp*10/121, 9)] = 1
+	x[winSplitScoreOff] = score / 30
+	return x
+}
