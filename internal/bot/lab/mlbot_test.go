@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/cribbager/cribbager/internal/bot"
 	"github.com/cribbager/cribbager/internal/cribbage"
 	"github.com/cribbager/cribbager/internal/game"
 )
@@ -43,7 +44,7 @@ func TestMLDiscardParity(t *testing.T) {
 	m := newMLDiscard("testdata/discard-v1.json").(*mlDiscard)
 	for i, c := range fx.Cases {
 		hand := parseCards(t, append(append([]string{}, c.Keep...), c.Discard...))
-		x := encodeSplit(hand, 4, 5, c.Dealer) // discards are the last two by construction
+		x := bot.DiscardInput(hand, 4, 5, c.Dealer) // discards are the last two by construction
 
 		for _, idx := range c.Ones {
 			if x[idx] != 1 {

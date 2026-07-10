@@ -46,33 +46,11 @@ func newMLDiscard(weights string) bot.Bot {
 func (m *mlDiscard) Name() string    { return "ml-discard" }
 func (m *mlDiscard) Version() string { return "1" }
 
-// The input encoding. This mirrors ml/cribml/data.py EXACTLY — the two are
-// held equal by TestMLDiscardParity against a Python-generated fixture. Any
-// change here or there must regenerate the fixture and keep that test green.
-const (
-	inputDim   = 105 // 52 keep multi-hot + 52 discard multi-hot + dealer flag
-	dealerFlag = 104
-)
-
-// cardIndex is the canonical 0..51 card index: 4*(rank-1) + suit.
-func cardIndex(c cribbage.Card) int { return 4*(int(c.Rank)-1) + int(c.Suit) }
-
-// encodeSplit builds the network input for discarding hand[di] and hand[dj]
-// from a six-card hand.
-func encodeSplit(hand []cribbage.Card, di, dj int, dealer bool) []float64 {
-	x := make([]float64, inputDim)
-	for k, c := range hand {
-		if k == di || k == dj {
-			x[52+cardIndex(c)] = 1
-		} else {
-			x[cardIndex(c)] = 1
-		}
-	}
-	if dealer {
-		x[dealerFlag] = 1
-	}
-	return x
-}
+// The input encoding lives in production (bot.DiscardInput, mlbot.go there):
+// it mirrors ml/cribml/data.py EXACTLY, and the two are held equal by
+// TestMLDiscardParity against a Python-generated fixture. Any change to
+// either side must regenerate the fixture and keep that test green.
+const inputDim = 105 // 52 keep multi-hot + 52 discard multi-hot + dealer flag
 
 // Discard scores all 15 splits with the network and throws the argmax.
 func (m *mlDiscard) Discard(v game.PlayerView) [2]cribbage.Card {
@@ -84,7 +62,7 @@ func (m *mlDiscard) Discard(v game.PlayerView) [2]cribbage.Card {
 	best, pick := math.Inf(-1), [2]cribbage.Card{}
 	for i := 0; i < len(h)-1; i++ {
 		for j := i + 1; j < len(h); j++ {
-			if val := m.net.Forward(encodeSplit(h, i, j, dealer))[0]; val > best {
+			if val := m.net.Forward(bot.DiscardInput(h, i, j, dealer))[0]; val > best {
 				best, pick = val, [2]cribbage.Card{h[i], h[j]}
 			}
 		}
