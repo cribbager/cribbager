@@ -16,7 +16,7 @@ import (
 func newBot(name string) bot.Bot {
 	b, err := bot.New(name, mrand.New(mrand.NewSource(cryptoSeed())))
 	if err != nil {
-		return bot.Champion()
+		b, _ = bot.New(bot.DefaultName, mrand.New(mrand.NewSource(cryptoSeed())))
 	}
 	return b
 }

@@ -14,7 +14,11 @@ node_modules/
 .env
 .env.*
 
-# research notes kept locally for now, not published (revisit how to handle these)
-docs/research/
+# research notes kept locally for now, not published — EXCEPT the ML bot
+# program (docs/research/ml-bot), published as a tutorial narrative. The `*`
+# form matters: ignoring the directory itself would prevent re-including any
+# child.
+docs/research/*
+!docs/research/ml-bot/
 /mldata
 /pegdata

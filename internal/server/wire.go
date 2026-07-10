@@ -232,7 +232,7 @@ type createRequest struct {
 	Target int    `json:"target"`
 	Name   string `json:"name,omitempty"`
 	// Bot names the production bot to seat as the opponent in "bot" mode. Empty
-	// means the default (bot.DefaultName, the champion). An unknown name is a 400.
+	// means the default (bot.DefaultName). An unknown name is a 400.
 	// Ignored for "open" games (there is no bot). The valid names are listed by
 	// GET /bots.
 	Bot string `json:"bot,omitempty"`

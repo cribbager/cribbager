@@ -23,12 +23,17 @@ type Bot interface {
 	Play(v game.PlayerView) cribbage.Card
 }
 
-// DefaultName is the name of the default opponent — the champion. Several named
-// production bots can coexist (see the registry below) and be selected per game;
-// when a caller doesn't pick one, this is the bot they get. It is a role name
-// ("the champion"), deliberately not tied to the current algorithm, so the
-// implementation can change without the name rippling through callers.
-const DefaultName = "champion"
+// ChampionName names the champion — the hand-built reference bot the
+// improvement program measures against (internal/bot/lab gates compare
+// challengers to it by default).
+const ChampionName = "champion"
+
+// DefaultName is the name of the default opponent — the bot seated when a
+// caller doesn't pick one. It became the ML bot when ml v2 beat the champion
+// on both promotion instruments (+0.75 pts/pair and +0.011 wins/pair over
+// 10,000 duplicate deal-pairs; docs/research/ml-bot chapters 5–7). The
+// champion remains available by name and stays the lab's reference.
+const DefaultName = "ml"
 
 // registry is the table of PRODUCTION bots: the bots the server may seat and the
 // CLI may pick, each built by name with an RNG (random uses it; deterministic
@@ -37,9 +42,9 @@ const DefaultName = "champion"
 // one seated by default. Bots under development live in internal/bot/lab and are
 // absent here, so a challenger can never reach the server until it is promoted.
 var registry = map[string]func(rng *rand.Rand) Bot{
-	"random":    func(rng *rand.Rand) Bot { return NewRandom(rng) },
-	DefaultName: func(*rand.Rand) Bot { return newChampion() },
-	"ml":        func(*rand.Rand) Bot { return newML() },
+	"random":     func(rng *rand.Rand) Bot { return NewRandom(rng) },
+	ChampionName: func(*rand.Rand) Bot { return newChampion() },
+	DefaultName:  func(*rand.Rand) Bot { return newML() },
 }
 
 // Names lists the production bots, sorted, so the set is stable and printable
@@ -68,8 +73,10 @@ func New(name string, rng *rand.Rand) (Bot, error) {
 	return make(rng), nil
 }
 
-// Champion returns the default opponent. Callers that just want "the default
-// bot" should use this instead of hardcoding a name.
+// Champion returns the champion — the hand-built reference bot. The lab's
+// gates and the training-data generators want this specific bot regardless
+// of what the server seats by default; callers wanting "the default
+// opponent" should build DefaultName via New instead.
 func Champion() Bot { return newChampion() }
 
 // hand6 converts a six-card view hand into a fixed array for the evaluators.

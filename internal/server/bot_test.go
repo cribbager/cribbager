@@ -126,14 +126,16 @@ func TestBotIdentitySurvivesRestore(t *testing.T) {
 		t.Errorf("human seat restored a bot: %v", restored.bots[game.Seat0])
 	}
 
-	// A legacy record (Bots set, no BotNames) restores the default opponent.
+	// A legacy record (Bots set, no BotNames) restores the CHAMPION — those
+	// games predate bot selection, so the champion is the opponent they were
+	// actually played against, whatever the default has since become.
 	legacy := Record{
 		ID:   "old",
 		Game: game.New(game.Options{Deck: cryptoDeck{}, TargetScore: 121}).Snapshot(),
 		Bots: [2]bool{false, true},
 	}
 	old := sessionFromRecord(legacy, nil)
-	if old.bots[game.Seat1] == nil || old.bots[game.Seat1].Name() != bot.DefaultName {
-		t.Errorf("legacy restore = %v, want the default champion", old.bots[game.Seat1])
+	if old.bots[game.Seat1] == nil || old.bots[game.Seat1].Name() != bot.ChampionName {
+		t.Errorf("legacy restore = %v, want the champion", old.bots[game.Seat1])
 	}
 }

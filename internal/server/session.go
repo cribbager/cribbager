@@ -243,7 +243,11 @@ func sessionFromRecord(r Record, subCnt *atomic.Int64) *session {
 		if r.Bots[seat] {
 			name := r.BotNames[seat]
 			if name == "" {
-				name = bot.DefaultName // legacy row written before bot names were stored
+				// Legacy row written before bot names were stored: those games
+				// were played against the champion (the only bot then), so
+				// restore the SAME opponent — deliberately not DefaultName,
+				// which has since moved on to the ML bot.
+				name = bot.ChampionName
 			}
 			s.bots[seat] = newBot(name)
 		}
