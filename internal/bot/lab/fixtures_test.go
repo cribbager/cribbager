@@ -3,6 +3,7 @@ package lab
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -68,10 +69,24 @@ func TestChallengerFixtures(t *testing.T) {
 		}
 	}
 
+	// BASELINE swaps the opponent (default: the champion), mirroring the main
+	// gate — e.g. BASELINE=ml isolates a discard change from the pegging both
+	// bots share.
+	base := bot.Champion()
+	if v := os.Getenv("BASELINE"); v != "" {
+		if b, ok := New(v); ok {
+			base = b
+		} else if b, err := bot.New(v, rand.New(rand.NewSource(9))); err == nil {
+			base = b
+		} else {
+			t.Fatalf("BASELINE %q: not a lab challenger (%v) or production bot (%v)", v, Names(), bot.Names())
+		}
+	}
+
 	// Pool the fixtures as one big paired sample for the overall verdict.
 	var pooledDiff, pooledVar float64
 	for fi, f := range fixtures {
-		c, err := bot.CompareFrom(cand, bot.Champion(), pairs, seed+int64(fi*pairs), f.start)
+		c, err := bot.CompareFrom(cand, base, pairs, seed+int64(fi*pairs), f.start)
 		if err != nil {
 			t.Fatalf("%s: %v", f.name, err)
 		}
