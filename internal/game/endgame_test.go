@@ -144,9 +144,11 @@ func TestPoneWinsAtShowBeforeDealerCounts(t *testing.T) {
 		t.Fatalf("winner = (%v,%v), want (%v,true)", w, ok, pone)
 	}
 
-	// The pone's hand (three Kings = 6) pushed it from 1 to 7, past the target of 5.
-	if got := g.Scores()[pone]; got != 7 {
-		t.Fatalf("pone score = %d, want 7", got)
+	// The pone's hand (three Kings = 6) crosses the target of 5 from 1. The event
+	// records the natural count (6), but the board score stops at the last hole:
+	// the stored score is exactly the target.
+	if got := g.Scores()[pone]; got != 5 {
+		t.Fatalf("pone score = %d, want 5 (board stops at the target)", got)
 	}
 
 	// Crucially, the dealer's hand and the crib were NOT scored after the pone won:
@@ -160,6 +162,11 @@ func TestPoneWinsAtShowBeforeDealerCounts(t *testing.T) {
 			handShowns++
 			if hs.Seat == dealer {
 				dealerWasShown = true
+			}
+			// The winning show event carries the natural count of the cards — never
+			// a "points needed" remainder.
+			if hs.Seat == pone && hs.Score.Total != 6 {
+				t.Errorf("pone HandShown.Score.Total = %d, want 6 (the full count)", hs.Score.Total)
 			}
 		}
 	}
@@ -201,6 +208,139 @@ func TestPoneWinsAtShowBeforeDealerCounts(t *testing.T) {
 	}
 	if !cardsetEqual(cribReveal.Cards, cardsFrom(t, "2H", "2D", "2C", "2S")) {
 		t.Errorf("uncounted crib = %v, want 2H 2D 2C 2S", cribReveal.Cards)
+	}
+}
+
+// pegPairGame starts a preset game (default target 121) with the dealer
+// (Seat0) at dealerScore, then drives the two-play sequence pone 8H, dealer 8C
+// — the dealer's pair scores 2 — and returns the game and the dealer's
+// CardPlayed event.
+func pegPairGame(t *testing.T, dealerScore int) (*Game, CardPlayed) {
+	t.Helper()
+	// Deal order alternates pone (Seat1), dealer (Seat0); index 12 is the
+	// starter (9S — not a Jack, so no heels).
+	deal := deckWith(t,
+		"8H", "8C", "2H", "3C", "4H", "5C", "9H", "TC", "QH", "QC", "KH", "KC",
+		"9S")
+	g := New(Options{
+		Deck:  NewScriptedDeck(deal),
+		Start: &Start{Scores: [2]int{dealerScore, 0}, Dealer: Seat0},
+	})
+	dealer, pone := Seat0, Seat1
+
+	if _, err := g.Apply(pone, discard(t, "QH", "KH")); err != nil {
+		t.Fatalf("pone discard: %v", err)
+	}
+	if _, err := g.Apply(dealer, discard(t, "QC", "KC")); err != nil {
+		t.Fatalf("dealer discard: %v", err)
+	}
+	if _, err := g.Apply(pone, Play{Card: mustCard(t, "8H")}); err != nil {
+		t.Fatalf("pone play: %v", err)
+	}
+	evs, err := g.Apply(dealer, Play{Card: mustCard(t, "8C")})
+	if err != nil {
+		t.Fatalf("dealer play: %v", err)
+	}
+	for _, e := range evs {
+		if cp, ok := e.(CardPlayed); ok {
+			return g, cp
+		}
+	}
+	t.Fatal("dealer play produced no CardPlayed event")
+	return nil, CardPlayed{}
+}
+
+// TestPegScoreStopsAtTarget pins the board rule for pegging: the event always
+// records the natural count of the play (a pair is 2), while the SCORE — the
+// board peg — stops at the target when the count crosses it. A non-crossing
+// play is entirely unchanged.
+func TestPegScoreStopsAtTarget(t *testing.T) {
+	dealer := Seat0
+
+	t.Run("crossing play: full event, clamped score", func(t *testing.T) {
+		g, cp := pegPairGame(t, 120) // pair 2 from 120 crosses 121
+		if cp.Score.Total != 2 {
+			t.Errorf("CardPlayed.Score.Total = %d, want 2 (a pair is 2, always)", cp.Score.Total)
+		}
+		if cp.Score.Pair.Points != 2 {
+			t.Errorf("CardPlayed.Score.Pair.Points = %d, want 2", cp.Score.Pair.Points)
+		}
+		if got := g.Scores()[dealer]; got != 121 {
+			t.Errorf("dealer score = %d, want exactly 121 (board stops at the target)", got)
+		}
+		if w, ok := g.Winner(); !ok || w != dealer {
+			t.Errorf("winner = (%v,%v), want (%v,true)", w, ok, dealer)
+		}
+	})
+
+	t.Run("exact landing", func(t *testing.T) {
+		g, cp := pegPairGame(t, 119) // pair 2 from 119 lands exactly on 121
+		if cp.Score.Total != 2 {
+			t.Errorf("CardPlayed.Score.Total = %d, want 2", cp.Score.Total)
+		}
+		if got := g.Scores()[dealer]; got != 121 {
+			t.Errorf("dealer score = %d, want exactly 121", got)
+		}
+		if w, ok := g.Winner(); !ok || w != dealer {
+			t.Errorf("winner = (%v,%v), want (%v,true)", w, ok, dealer)
+		}
+	})
+
+	t.Run("non-crossing play is unchanged", func(t *testing.T) {
+		g, cp := pegPairGame(t, 100) // pair 2 from 100: nowhere near the target
+		if cp.Score.Total != 2 {
+			t.Errorf("CardPlayed.Score.Total = %d, want 2", cp.Score.Total)
+		}
+		if got := g.Scores()[dealer]; got != 102 {
+			t.Errorf("dealer score = %d, want 102", got)
+		}
+		if _, ok := g.Winner(); ok {
+			t.Error("game over after a non-crossing play")
+		}
+	})
+}
+
+// TestHeelsScoreStopsAtTarget pins the board rule at the cut with a
+// non-default target: his heels from target-1 still records the full 2 in the
+// event, but the dealer's stored score is exactly the target. Guards against
+// hardcoding 121 in the clamp.
+func TestHeelsScoreStopsAtTarget(t *testing.T) {
+	const target = 5
+	deal := deckWith(t,
+		"3H", "4C", "5H", "6C", "7H", "8C", "3D", "4D", "5D", "6D", "7D", "8D",
+		"JH") // starter is a Jack -> his heels
+	g := New(Options{
+		Deck:        NewScriptedDeck(deal),
+		TargetScore: target,
+		Start:       &Start{Scores: [2]int{target - 1, 0}, Dealer: Seat0},
+	})
+	dealer, pone := Seat0, Seat1
+
+	if _, err := g.Apply(pone, discard(t, "7H", "7D")); err != nil {
+		t.Fatalf("pone discard: %v", err)
+	}
+	evs, err := g.Apply(dealer, discard(t, "8C", "8D"))
+	if err != nil {
+		t.Fatalf("dealer discard: %v", err)
+	}
+
+	var sawCut bool
+	for _, e := range evs {
+		if sc, ok := e.(StarterCut); ok {
+			sawCut = true
+			if sc.Heels != 2 {
+				t.Errorf("StarterCut.Heels = %d, want 2 (heels are 2, always)", sc.Heels)
+			}
+		}
+	}
+	if !sawCut {
+		t.Fatal("no StarterCut event")
+	}
+	if got := g.Scores()[dealer]; got != target {
+		t.Errorf("dealer score = %d, want exactly the target %d", got, target)
+	}
+	if w, ok := g.Winner(); !ok || w != dealer {
+		t.Errorf("winner = (%v,%v), want (%v,true)", w, ok, dealer)
 	}
 }
 

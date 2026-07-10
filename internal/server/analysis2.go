@@ -540,7 +540,11 @@ func analyzeGameV2(id string, seat game.Seat, events []game.Event, engines []ana
 				}
 			}
 		// Score accumulation mirrors the engine's reduce, so start_scores are
-		// exactly the engine's scores at each HandDealt.
+		// exactly the engine's scores at each HandDealt. The engine additionally
+		// caps the winner's score at the target on the game-winning award
+		// (game.addPoints); this sum skips that cap, which is safe because no
+		// HandDealt ever follows a win — the cap can never reach a deal's
+		// start_scores.
 		case game.StarterCut:
 			scores[dealer] += e.Heels
 		case game.CardPlayed:

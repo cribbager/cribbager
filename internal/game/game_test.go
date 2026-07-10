@@ -149,12 +149,19 @@ func checkVisibility(t *testing.T, g *Game, seed int64) {
 	}
 }
 
-// reconcile checks that the sum of all points awarded by events equals the final
-// scores.
+// reconcile checks that the events' points, applied under the board rule —
+// events carry the full count, the score stops at the target (addPoints) —
+// equal the final scores.
 func reconcile(t *testing.T, g *Game, seed int64) {
 	t.Helper()
 	var pts [2]int
 	dealer := Seat0
+	award := func(seat Seat, p int) {
+		pts[seat] += p
+		if pts[seat] > g.target {
+			pts[seat] = g.target
+		}
+	}
 	for _, e := range g.Events() {
 		switch e := e.(type) {
 		case CutForDeal:
@@ -164,15 +171,15 @@ func reconcile(t *testing.T, g *Game, seed int64) {
 		case HandDealt:
 			dealer = e.Dealer
 		case StarterCut:
-			pts[dealer] += e.Heels
+			award(dealer, e.Heels)
 		case CardPlayed:
-			pts[e.Seat] += e.Score.Total
+			award(e.Seat, e.Score.Total)
 		case GoAwarded:
-			pts[e.Seat] += e.Points
+			award(e.Seat, e.Points)
 		case HandShown:
-			pts[e.Seat] += e.Score.Total
+			award(e.Seat, e.Score.Total)
 		case CribShown:
-			pts[dealer] += e.Score.Total
+			award(dealer, e.Score.Total)
 		}
 	}
 	if pts != g.scores {
@@ -181,10 +188,11 @@ func reconcile(t *testing.T, g *Game, seed int64) {
 }
 
 // foldEqual replays the event log into a fresh game and checks the foldable
-// state matches — i.e. the live state really is the fold of the log.
+// state matches — i.e. the live state really is the fold of the log. The fold
+// must run under the same target: score application caps at it (addPoints).
 func foldEqual(t *testing.T, g *Game, seed int64) {
 	t.Helper()
-	r := &Game{winner: -1}
+	r := &Game{winner: -1, target: g.target}
 	for _, e := range g.Events() {
 		r.reduce(e)
 	}
@@ -347,8 +355,8 @@ func TestSimulation(t *testing.T) {
 		if !ok {
 			t.Fatalf("seed %d: no winner", seed)
 		}
-		if g.scores[w] < g.target {
-			t.Fatalf("seed %d: winner %v has %d, below target %d", seed, w, g.scores[w], g.target)
+		if g.scores[w] != g.target {
+			t.Fatalf("seed %d: winner %v has %d, want exactly the target %d", seed, w, g.scores[w], g.target)
 		}
 		if loser := other(w); g.scores[loser] >= g.target {
 			t.Fatalf("seed %d: both seats reached target", seed)

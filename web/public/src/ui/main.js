@@ -599,12 +599,14 @@ async function onEvent(e) {
         }
         case 'gameOver': {
             const won = e.winner === HUMAN;
-            // Cribbage ends the instant a player reaches 121, so the DISPLAYED score
-            // is capped there even though the engine reports the raw show total (e.g.
-            // a final hand can total the winner past 121). This is a pure display
-            // policy applied identically by both clients (and matching the board peg,
-            // which already clamps at 121), so it introduces no divergence. Skunk
-            // thresholds use the LOSER's score (always < 121), so they're unaffected.
+            // Cribbage ends the instant a player reaches 121: events announce the
+            // full count (a final hand still totals e.g. 12), but the board score
+            // stops at the last hole. The engine applies the same rule when folding
+            // events into scores, so this cap is the PERMANENT board rule for any
+            // client-side fold of scoring deltas — not a workaround. Applied
+            // identically by both clients (and matching the board peg, which already
+            // clamps at 121), so it introduces no divergence. Skunk thresholds use
+            // the LOSER's score (always < 121), so they're unaffected.
             const shown = [Math.min(state.score[HUMAN], 121), Math.min(state.score[BOT], 121)];
             // No modal: the terminal result is an in-page box under the versus panel
             // (see resultsBox). It offers Play again / Rematch and Evaluate (the latter

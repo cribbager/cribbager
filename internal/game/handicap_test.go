@@ -49,8 +49,11 @@ func TestHandicapSimulation(t *testing.T) {
 			if !ok {
 				t.Fatalf("start %d seed %d: no winner", si, seed)
 			}
-			if g.scores[w] < g.target {
-				t.Fatalf("start %d seed %d: winner %v has %d, below target", si, seed, w, g.scores[w])
+			if g.scores[w] != g.target {
+				t.Fatalf("start %d seed %d: winner %v has %d, want exactly the target %d", si, seed, w, g.scores[w], g.target)
+			}
+			if g.scores[other(w)] >= g.target {
+				t.Fatalf("start %d seed %d: loser has %d, at or above target %d", si, seed, g.scores[other(w)], g.target)
 			}
 			reconcile(t, g, seed)
 			foldEqual(t, g, seed)
