@@ -312,6 +312,15 @@ html, body {
 .results-score { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
 .results-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
 .results-actions button { width: 100%; }
+/* "Evaluate game" — a navigation (to the unified replay+analysis page), styled
+   as the secondary action so it reads like its sibling button. */
+.results-eval {
+  display: block; width: 100%; text-align: center; text-decoration: none;
+  font: inherit; font-weight: 700; color: var(--color-ink);
+  background: var(--color-surface); border: 1px solid var(--line);
+  border-radius: var(--radius-md, 8px); padding: 8px 14px;
+}
+.results-eval:hover { border-color: var(--color-accent); color: var(--color-accent); }
 
 /* The show reveals every hand in its own hand area (face up) and the crib in the
    dealer's pegging area — cards + starter + that hand's own count sit inline. Both
@@ -347,11 +356,6 @@ html, body {
 .show-hand:focus-within .show-explain, .show-crib:focus-within .show-explain,
 .show-explain:focus-visible { opacity: 1; pointer-events: auto; }
 .show-explain:hover { background: var(--color-accent); color: var(--color-on-accent); }
-
-/* In-game "Evaluate game" overlay: the shared analysis view (.an-*) in a modal. */
-.eval-modal { text-align: left; max-width: 620px; width: 92vw; max-height: 82vh; overflow-y: auto; }
-.eval-modal h2 { text-align: center; }
-.eval-body { margin: 6px 0 14px; }
 
 /* the crib: a dashed card outline with "crib" inside (no faded card, no label) */
 .crib-slot {
@@ -565,32 +569,23 @@ button:active { transform: translateY(1px); }
 }
 
 /* ============================================================================
-   Post-game discard analysis view (A8) — analyze.html / analyze.js.
-   A read-only verdict list; token-built, consistent with the rest of the app.
+   Unified replay + analysis (A10) — analyze.html / analyze.js ("Evaluate game").
+   The replay board on the left, a per-deal decision rail on the right.
+   Token-built, consistent with the rest of the app.
    ============================================================================ */
-#analyze { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
+#analyze { max-width: 1240px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
 .an-title { margin: 0 0 var(--space-1); font-size: var(--text-2xl); font-weight: 800; }
 .an-subtitle { margin: 0 0 var(--space-4); color: var(--color-ink-muted); }
-.an-summary { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4);
-  padding: var(--space-4) var(--space-5); }
-.an-summary-main { font-size: var(--text-xl); font-weight: 800; color: var(--color-ink); }
-.an-summary-sub { color: var(--color-ink-muted); font-weight: 600; }
-
-.an-hands { display: flex; flex-direction: column; gap: var(--space-3); }
-.an-hand { padding: var(--space-4); }
-.an-hand.is-optimal { border-color: var(--color-success-border); }
-.an-hand-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
-.an-hand-no { font-weight: 800; color: var(--color-ink); }
 .an-crib { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;
   color: var(--color-ink-muted); background: var(--color-surface-tag); border-radius: var(--radius-pill);
   padding: 2px 10px; }
 .an-badge { margin-left: auto; font-size: var(--text-sm); font-weight: 800; border-radius: var(--radius-pill);
-  padding: 3px 11px; }
+  padding: 3px 11px; white-space: nowrap; }
 .an-badge.ok { color: var(--color-success); background: var(--color-success-bg); border: 1px solid var(--color-success-border); }
 .an-badge.off { color: var(--color-danger-ink); background: var(--color-danger-bg); border: 1px solid var(--color-danger-border);
   font-variant-numeric: tabular-nums; }
 
-.an-hand-cards { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
+.an-hand-cards { display: flex; gap: var(--space-2); margin: var(--space-2) 0; flex-wrap: wrap; }
 /* Thrown cards in the dealt six are dimmed; kept cards stay full-strength. */
 .an-hand-cards .card.an-thrown { opacity: 0.42; }
 
@@ -609,16 +604,7 @@ button:active { transform: translateY(1px); }
 .an-message-title { font-size: var(--text-lg); font-weight: 800; margin: 0 0 var(--space-2); color: var(--color-ink); }
 .an-message-body { color: var(--color-ink-muted); margin: 0 0 var(--space-3); }
 
-/* Post-game links under the game-over overlay buttons ("Analyze" / "Replay"). */
-.end-links { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-.end-analyze, .end-replay { display: inline-block; color: var(--btn); font-weight: 700; text-decoration: none; }
-.end-analyze:hover, .end-replay:hover { text-decoration: underline; }
-/* "Open full replay" link on the analysis page summary. */
-.an-replay { display: inline-block; margin: 0 0 var(--space-4); color: var(--btn); font-weight: 700; text-decoration: none; }
-.an-replay:hover { text-decoration: underline; }
-
-/* === Game replay (A2) — the dedicated move-by-move spectator view =========== */
-#replay { max-width: 860px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
+/* --- the replay board half (A2's spectator view, reused verbatim) --- */
 /* The replay's felt mirrors the live table, minus any interactive affordances. */
 .replay-felt .card.selectable, .replay-felt .card.legal { cursor: default; }
 .replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
@@ -636,16 +622,66 @@ button:active { transform: translateY(1px); }
   color: var(--color-ink-muted); font-weight: 700; }
 .replay-count strong { color: var(--color-ink); font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
 
-/* A4: the engine's discard-verdict overlay for the graded seat (the viewing
-   user), shown above the felt and reusing analyze.js's chips/badges/lines. */
-.replay-verdict-wrap { margin-bottom: var(--space-4); }
-.replay-verdict { padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
-.replay-verdict.is-optimal { border-color: var(--color-success-border); }
-.replay-verdict-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-1); }
-.replay-verdict-who { font-weight: 800; color: var(--color-ink); }
-.replay-verdict-crib { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px;
+/* --- the decision rail: board left, rail right; the rail keeps its width and
+   the felt takes the rest. Desktop-first; on a narrow viewport the rail drops
+   below the board (same pattern as the live game's side rail). --- */
+.ev-layout { display: flex; gap: var(--space-4); align-items: flex-start; }
+.ev-main { flex: 1 1 auto; min-width: 0; }
+.ev-rail { width: 340px; flex: none; display: flex; flex-direction: column; gap: var(--space-3); }
+@media (max-width: 900px) {
+  .ev-layout { flex-direction: column; align-items: stretch; }
+  .ev-rail { width: 100%; }
+}
+
+.ev-engines { display: flex; align-items: center; gap: var(--space-3); }
+.ev-rail-label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px;
   font-weight: 700; color: var(--color-ink-muted); }
-.replay-verdict .an-badge { margin-left: auto; }
+
+.ev-summary { padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
+.ev-summary-line { font-weight: 700; color: var(--color-ink); font-variant-numeric: tabular-nums; }
+
+/* The deal list. Each deal is a full-width button row: number, starting scores,
+   the two ✓/✗ marks, and the divergence dot. The viewed deal is highlighted and
+   its decision details expand beneath it. */
+.ev-deals { padding: var(--space-2); display: flex; flex-direction: column; gap: 2px; }
+.ev-deal { display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left;
+  font: inherit; cursor: pointer; background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); box-shadow: none; }
+.ev-deal:hover { background: var(--color-felt); }
+.ev-deal.is-current { background: var(--color-felt); border-color: var(--line); }
+.ev-deal-no { font-weight: 800; color: var(--color-ink); white-space: nowrap; }
+.ev-deal-scores { color: var(--color-ink-muted); font-weight: 700; font-variant-numeric: tabular-nums;
+  margin-right: auto; }
+.ev-mark { font-size: var(--text-xs); font-weight: 800; white-space: nowrap; }
+.ev-mark.ok { color: var(--color-success); }
+.ev-mark.bad { color: var(--color-danger-ink); }
+.ev-mark.none { color: var(--color-ink-muted); font-weight: 700; }
+/* Engine divergence: the owner wants to SEE where the engines split. */
+.ev-disagree-dot { font-weight: 800; color: var(--gold); }
+.ev-disagree { align-self: flex-start; font-size: var(--text-xs); font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--gold); margin-top: 2px; }
+
+/* The viewed deal's decisions, inline under its row. */
+.ev-decisions { display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) var(--space-3); }
+.ev-decision { display: flex; flex-direction: column; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); background: var(--panel); }
+.ev-decision.is-optimal { border-color: var(--color-success-border); }
+.ev-decision-head { display: flex; align-items: center; gap: var(--space-2); }
+.ev-decision-label { font-weight: 800; color: var(--color-ink); }
+.ev-count { color: var(--color-ink-muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ev-no-plays { color: var(--color-ink-muted); font-size: var(--text-sm); font-weight: 600; }
+.ev-rail-note { padding: var(--space-4); }
+/* Rail decision cards are narrow: shrink the dealt-six faces (the same
+   --card-scale pattern the discard evaluator's deck rows use). */
+.ev-decisions .an-hand-cards {
+  --card-scale: 0.62;
+  --card-w: calc(70px * var(--card-scale));
+  --card-h: calc(98px * var(--card-scale));
+  --card-rank-size: calc(18px * var(--card-scale));
+  --card-suit-size: calc(14px * var(--card-scale));
+  --card-pip-size: calc(32px * var(--card-scale));
+}
 
 /* === Discard trainer (A5) — a standalone practice page ====================== */
 #practice { max-width: 720px; margin: 0 auto; padding: var(--space-5) var(--space-4); }

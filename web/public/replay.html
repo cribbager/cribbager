@@ -3,18 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Game replay · Cribbager</title>
-    <!-- Inline empty icon so the browser doesn't request /favicon.ico (a stray 404). -->
+    <title>Evaluate game · Cribbager</title>
     <link rel="icon" href="data:," />
-    <!-- cardFace.css: the replay renders real card faces for both hands + the crib. -->
-    <link rel="stylesheet" href="/src/ui/cardFace.css" />
-    <link rel="stylesheet" href="/src/ui/styles.css" />
+    <!-- The standalone replay page merged into the unified replay+analysis page
+         (A10). Old links keep working: forward them there, query string intact. -->
+    <script>location.replace('/analyze.html' + location.search);</script>
   </head>
   <body>
-    <!-- Global site header (wordmark + auth/identity), mounted by header.js. -->
-    <header id="site-header"></header>
-    <!-- Move-by-move replay of one finished game with full visibility (?game=<id>). -->
-    <div id="replay"></div>
-    <script type="module" src="/src/ui/replay.js"></script>
+    <p>This page has moved to <a href="/analyze.html">the game evaluation page</a>.</p>
   </body>
 </html>

@@ -13,10 +13,6 @@ import { cardFace } from './cardFace.js';
 import { buildBreakdownLines, breakdownList } from './comboBreakdown.js';
 import { GameClient } from '../net/client.js';
 import { mountHeader } from './header.js';
-// In-game "Evaluate game": rate this game's discards client-side (works for
-// guests/bot/mp, no login) and render them with the shared analysis view.
-import { buildEvaluationData } from './evaluation.js';
-import { analysisBody } from './analysisRender.js';
 // HUMAN/BOT are UI positions: "me" at the bottom, the opponent at the top.
 const HUMAN = 0;
 const BOT = 1;
@@ -100,10 +96,10 @@ quitButton.addEventListener('click', onQuit);
 // (quitButton stays referenced by onQuit/setChrome, just not mounted).
 app.append(h('div', { class: 'game-layout' }, elFelt, elSide));
 // Mount the global site header (wordmark + auth/identity). It sits above #app and
-// never sets the page width, so the board layout is unaffected. We also mirror the
-// auth state locally: post-game discard analysis is account-scoped (it lives under
-// /users/me/...), so the "Analyze this game" link on the game-over overlay only
-// appears for a signed-in participant — a guest's account-less game would 404.
+// never sets the page width, so the board layout is unaffected. The auth state is
+// mirrored locally for display (the versus panel names the signed-in player);
+// post-game evaluation is NOT login-gated — the game-over "Evaluate game" link
+// works for guests via the stashed per-game player token (see saveEvalToken).
 let currentUser = null;
 mountHeader({ onAuthChange: (u) => { currentUser = u; } });
 
@@ -284,19 +280,22 @@ function playerRow(p) {
         h('span', { class: 'vs-score' }, String(state.score[p])));
 }
 // resultsBox is the in-page game-over card (no modal): outcome, final score (mine
-// first), and the actions — Play again / Rematch, plus Evaluate (client-side, so
-// it's offered to everyone).
+// first), and the actions — Play again / Rematch, plus Evaluate Game, a link into
+// the unified replay+analysis page (A10). The link is offered to EVERYONE,
+// including guests: the page authenticates with the per-game player token stashed
+// at game over (see saveEvalToken), so no login is required.
 function resultsBox() {
     const o = state.over;
     const skunkTxt = o.skunk === 'double' ? ' — double skunk!' : o.skunk === 'skunk' ? ' — skunk!' : '';
     const again = h('button', { class: 'primary' }, lastMode === 'mp' ? 'Rematch' : 'Play again');
     again.addEventListener('click', lastMode === 'mp' ? goNewOpen : goNewBot);
-    const evalBtn = h('button', {}, 'Evaluate game');
-    evalBtn.addEventListener('click', openEvaluation);
+    const evalLink = curGameId
+        ? h('a', { class: 'results-eval', href: '/analyze.html?game=' + encodeURIComponent(curGameId) }, 'Evaluate game')
+        : null;
     return h('div', { class: 'panel results-box' },
         h('div', { class: 'results-outcome' }, (o.won ? 'You win' : 'You lose') + skunkTxt),
         h('div', { class: 'results-score' }, `${o.my} – ${o.opp}`),
-        h('div', { class: 'results-actions' }, again, evalBtn));
+        h('div', { class: 'results-actions' }, again, evalLink));
 }
 function sidePanel() {
     // Order matches the board's top/bottom: opponent (top) first, you (bottom) second.
@@ -304,26 +303,6 @@ function sidePanel() {
         h('div', { class: 'panel vs-box' }, playerRow(BOT), playerRow(HUMAN)),
         state.over ? resultsBox() : null);
 }
-// openEvaluation rates the discards of the game just played and shows the shared
-// analysis view in an overlay. It runs entirely client-side (buildEvaluationData
-// → POST /tools/discard-eval per hand), so it needs no login or stored result.
-async function openEvaluation() {
-    const body = h('div', { class: 'eval-body' }, h('div', { class: 'sq-answer-loading' }, 'Evaluating…'));
-    const close = h('button', { class: 'primary' }, 'Close');
-    const overlay = h('div', { class: 'overlay' });
-    close.addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
-    overlay.append(h('div', { class: 'card-modal eval-modal' },
-        h('h2', {}, 'Game evaluation'), body, h('div', {}, close)));
-    document.body.append(overlay);
-    try {
-        const data = await buildEvaluationData(evalHands);
-        body.replaceChildren(...analysisBody(data));
-    } catch {
-        body.replaceChildren(h('p', {}, 'Sorry — we couldn’t evaluate this game.'));
-    }
-}
-
 // openExplain shows a display-only modal breaking the hand (or crib) down as
 // `[cards] <combo> for <running count>`, the same style as the Hand Counting
 // Tutorial. The live show deltas carry combos WITHOUT per-combo cards, so the
@@ -609,10 +588,12 @@ async function onEvent(e) {
             // the LOSER's score (always < 121), so they're unaffected.
             const shown = [Math.min(state.score[HUMAN], 121), Math.min(state.score[BOT], 121)];
             // No modal: the terminal result is an in-page box under the versus panel
-            // (see resultsBox). It offers Play again / Rematch and Evaluate (the latter
-            // computed client-side, so every player — guest, bot, or mp — can use it).
+            // (see resultsBox). It offers Play again / Rematch and Evaluate Game (a
+            // link into the unified replay+analysis page; the stashed player token
+            // lets every player — guest, bot, or mp — open it, no login needed).
             // Keep any show reveal on screen beneath it. Clean up the live game like
             // endOverlay did (drop the saved entry, close the stream).
+            if (curGameId && curToken) saveEvalToken(curGameId, curToken);
             if (curGameId) clearGame(curGameId);
             if (activeStream) { activeStream.close(); activeStream = null; }
             clearControls();
@@ -752,12 +733,24 @@ const loadGame = (id) => allSaved()[id] || null;
 const clearGame = (id) => { try { const m = allSaved(); delete m[id]; localStorage.setItem(SAVE_KEY, JSON.stringify(m)); } catch { /* ignore */ } };
 let lastMode = 'bot';    // 'bot' | 'mp' — drives the game-over options (new game vs rematch)
 let activeStream = null; // the live EventSource, closed when a new game starts
-// evalHands captures every hand I discarded from, for the client-side "Evaluate
-// game" (openEvaluation). Reset at the start of each game (startGame/startMultiplayer).
-let evalHands = [];
-const recordDiscard = (view, chosen) => evalHands.push({ hand: view.hand.map(cardCode), dealer: view.isMyCrib, throw: chosen.map(cardCode) });
 let curGameId = null;    // the active game + my token, for the Leave button + cleanup
 let curToken = null;
+
+// The unified evaluate page (analyze.html) authenticates with the per-game
+// player token, so it works for GUESTS: at game over we stash the token by game
+// id for it to present as a Bearer credential (the server also accepts the
+// login cookie, its durable path). Kept for the last few games only — the token
+// is only useful while the finished session is still in the server's registry.
+const EVAL_TOKENS_KEY = 'cribbager:eval-tokens';
+function saveEvalToken(id, token) {
+    try {
+        const m = JSON.parse(localStorage.getItem(EVAL_TOKENS_KEY) || '{}');
+        m[id] = { token, at: Date.now() };
+        const ids = Object.keys(m).sort((a, b) => (m[b].at || 0) - (m[a].at || 0));
+        for (const stale of ids.slice(12)) delete m[stale];
+        localStorage.setItem(EVAL_TOKENS_KEY, JSON.stringify(m));
+    } catch { /* private mode */ }
+}
 
 // hydrateFromSnapshot paints the board directly from a snapshot (no replay), used
 // when rejoining a game already in progress.
@@ -782,7 +775,6 @@ async function startGame() {
     MY_SEAT = 0;
     oppLabel = 'Opponent';
     lastMode = 'bot';
-    evalHands = [];
     setChrome('bot');
     if (activeStream) { activeStream.close(); activeStream = null; }
     setStatus(null);
@@ -804,7 +796,6 @@ async function startGame() {
         if (snap.Phase === 'discard' && snap.YourHand.length === 6) {
             const dview = discardViewFromSnap(snap);
             const chosen = await humanAgent.discard(dview);
-            recordDiscard(dview, chosen);
             const resp = await client.act(game_id, player_token, { type: 'discard', cards: chosen.map(cardToStr) });
             await animate(resp.deltas, ctx);
         } else if (snap.Phase === 'play' && snap.ToPlay === MY_SEAT) {
@@ -828,7 +819,6 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
     MY_SEAT = mySeat;
     oppLabel = 'Opponent';
     lastMode = 'mp';
-    evalHands = [];
     setChrome('mp');
     if (activeStream) { activeStream.close(); activeStream = null; }
     curGameId = gameId; curToken = token;
@@ -888,7 +878,6 @@ async function startMultiplayer(gameId, token, mySeat, opts = {}) {
             setStatus(null);
             const dview = discardViewFromSnap(snap);
             const chosen = await humanAgent.discard(dview);
-            recordDiscard(dview, chosen);
             await client.act(gameId, token, { type: 'discard', cards: chosen.map(cardToStr) });
             return true;
         }
