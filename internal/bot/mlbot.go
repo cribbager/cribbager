@@ -3,6 +3,7 @@ package bot
 import (
 	"bytes"
 	_ "embed"
+	"math"
 
 	"github.com/cribbager/cribbager/internal/bot/eval"
 	"github.com/cribbager/cribbager/internal/bot/peg"
@@ -11,50 +12,112 @@ import (
 	"github.com/cribbager/cribbager/internal/nn"
 )
 
-// mlPegWeights is the trained pegging Q-network (docs/research/ml-bot,
-// chapters 4–5): 128→128→128→13, fitted-Q on pooled ε-greedy self-play.
-// Embedded so the shipped bot has no runtime file dependency; regenerate via
-// the training pipeline in ml/ and lab, and bump mlVersion when replacing.
+// The ml bot's trained networks, embedded so the shipped bot has no runtime
+// file dependency. Weights are build artifacts — regenerate via the training
+// pipelines in ml/ and the lab, and bump mlVersion when replacing either.
+//
+// mlPegWeights (chapters 4–5): pegging Q-network, 128→128→128→13, fitted-Q
+// on pooled ε-greedy self-play.
+//
+// mlDiscardWeights (chapter 7): discard pegging-differential net, 105→…→1 —
+// predicts a keep's realized pegging differential under this bot's own
+// pegging, the one deal component the exact evaluator cannot rank per hold.
 //
 //go:embed mlpeg-weights-v1.json
 var mlPegWeights []byte
 
-const mlVersion = "1"
+//go:embed mldiscard-weights-v1.json
+var mlDiscardWeights []byte
 
-// ml is the ML program's production bot — the first learned player to pass
-// the promotion gates (Phase 3, docs/research/ml-bot chapter 6). It discards
-// exactly like the champion (win-probability objective; the supervised
-// discard experiment of chapters 2–3 showed imitation could only tie, so the
-// exact evaluator stays) and pegs with the Q-network, which beat the
-// champion's one-ply pegging by +0.70 pts/pair (95% CI +0.46..+0.95) on the
-// pegging-isolated gate with no measurable endgame regression on the
-// positional fixtures. Deterministic: same view in, same move out.
+// mlVersion history:
+// v1: champion discards + Q-network pegging — promoted at +0.70 pts/pair
+// (CI +0.46..+0.95) on the pegging-isolated gate, fixtures clean.
+// v2: discards by exact expected points PLUS the learned pegging
+// differential of the keep (residual learning, chapter 7) — promoted at
+// +0.78 pts/pair (CI +0.55..+1.02) over v1 on the discard-isolated gate at
+// win-parity, and +0.008 wins/pair (CI +0.002..+0.013) pooled over the
+// positional fixtures (the pegging-aware keeps WIN endgames: +0.043 at
+// 118-118, where pegging is the whole game).
+const mlVersion = "2"
+
+// ml is the ML program's production bot — the learned player that passed the
+// promotion gates (docs/research/ml-bot). Both decisions are deterministic:
+// same view in, same move out.
 type ml struct {
-	net *nn.MLP
+	pegNet     *nn.MLP
+	discardNet *nn.MLP
 }
 
 // newML builds the production ML bot from the embedded weights. The weights
-// are a build artifact — if they fail to parse, the binary is broken, so this
+// are build artifacts — if they fail to parse, the binary is broken, so this
 // panics rather than limping.
 func newML() Bot {
-	m, err := nn.Load(bytes.NewReader(mlPegWeights))
+	pn, err := nn.Load(bytes.NewReader(mlPegWeights))
 	if err != nil {
 		panic("bot: embedded ml pegging weights: " + err.Error())
 	}
-	if m.InputSize() != peg.Dims || m.OutputSize() != peg.Actions {
+	if pn.InputSize() != peg.Dims || pn.OutputSize() != peg.Actions {
 		panic("bot: embedded ml pegging weights have the wrong shape")
 	}
-	return ml{net: m}
+	dn, err := nn.Load(bytes.NewReader(mlDiscardWeights))
+	if err != nil {
+		panic("bot: embedded ml discard weights: " + err.Error())
+	}
+	if dn.InputSize() != discardInputDim || dn.OutputSize() != 1 {
+		panic("bot: embedded ml discard weights have the wrong shape")
+	}
+	return ml{pegNet: pn, discardNet: dn}
 }
 
 func (ml) Name() string    { return "ml" }
 func (ml) Version() string { return mlVersion }
 
+// Discard ranks all 15 splits by exact expected points (hand + signed crib)
+// plus the net's predicted pegging differential for the keep, and throws the
+// argmax. Deliberately score-blind: the positional fixtures measured this
+// AHEAD of the win-probability discard on endgame wins — pegging-aware keeps
+// are worth more than the win-walk's hold-independent pegging approximation.
 func (b ml) Discard(v game.PlayerView) [2]cribbage.Card {
-	d, _ := eval.BestDiscardWin(hand6(v.YourHand), v.Dealer == v.You, v.Scores[v.You], v.Scores[1-v.You])
-	return d
+	h := v.YourHand
+	dealer := v.Dealer == v.You
+	best, pick := math.Inf(-1), [2]cribbage.Card{}
+	for _, rd := range eval.RankDiscards(hand6(h), dealer) {
+		cards := append(append([]cribbage.Card{}, rd.Keep[:]...), rd.Discard[:]...)
+		val := rd.Score + b.discardNet.Forward(DiscardInput(cards, 4, 5, dealer))[0]
+		if val > best {
+			best, pick = val, rd.Discard
+		}
+	}
+	return pick
 }
 
 func (b ml) Play(v game.PlayerView) cribbage.Card {
-	return peg.Net{M: b.net}.Play(v, nil) // greedy: the rng is never touched
+	return peg.Net{M: b.pegNet}.Play(v, nil) // greedy: the rng is never touched
+}
+
+// The discard nets' input encoding: multi-hot keep, multi-hot discard, dealer
+// flag. Mirrored EXACTLY by ml/cribml/data.py and held equal by the lab's
+// Python-generated parity fixture (lab/mlbot_test.go). Card index is
+// 4*(rank-1) + suit, matching internal/cribbage's Rank/Suit values.
+const (
+	discardInputDim  = 105 // 52 keep + 52 discard + dealer flag
+	discardDealerBit = 104
+)
+
+// DiscardInput builds the discard-net input for throwing hand[di] and
+// hand[dj] from a six-card hand.
+func DiscardInput(hand []cribbage.Card, di, dj int, dealer bool) []float64 {
+	x := make([]float64, discardInputDim)
+	for k, c := range hand {
+		idx := 4*(int(c.Rank)-1) + int(c.Suit)
+		if k == di || k == dj {
+			x[52+idx] = 1
+		} else {
+			x[idx] = 1
+		}
+	}
+	if dealer {
+		x[discardDealerBit] = 1
+	}
+	return x
 }

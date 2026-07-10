@@ -36,8 +36,21 @@ func TestMLBot(t *testing.T) {
 		You: game.Seat0, Dealer: game.Seat0,
 		YourHand: cards("5H", "TD", "JS", "QC", "2H", "7C"),
 	}
-	if got, want := b.Discard(dv), Champion().Discard(dv); got != want {
-		t.Errorf("Discard = %v, champion discards %v — must be identical", got, want)
+	d := b.Discard(dv)
+	if d[0] == d[1] {
+		t.Fatalf("Discard returned the same card twice: %v", d)
+	}
+	for _, c := range d {
+		found := false
+		for _, h := range dv.YourHand {
+			found = found || h == c
+		}
+		if !found {
+			t.Fatalf("Discard returned %v, not in hand %v", c, dv.YourHand)
+		}
+	}
+	if again := b.Discard(dv); again != d {
+		t.Errorf("Discard not deterministic: %v then %v", d, again)
 	}
 
 	pv := game.PlayerView{

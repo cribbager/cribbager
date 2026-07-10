@@ -27,13 +27,15 @@ model, v3 added the win-probability objective.
 `internal/bot` is a small registry of **named production bots**. Three ship today:
 
 - `champion` — the default, described in the rest of this document.
-- `ml` — the machine-learned bot: it discards exactly like the champion (same
-  win-probability evaluator) but pegs with a small neural network trained by
-  self-play reinforcement learning. The network (128→128→128→13, ~35k weights,
-  embedded in the binary) was promoted after beating the champion's pegging by
-  +0.70 pts/pair (95% CI +0.46..+0.95) over 10,000 duplicate deal-pairs on
-  deals disjoint from its training, with no measurable regression on the
-  positional fixtures.
+- `ml` — the machine-learned bot. It pegs with a small neural network trained
+  by self-play reinforcement learning (promoted at +0.70 pts/pair, 95% CI
+  +0.46..+0.95, over the champion's pegging on 10,000 duplicate deal-pairs
+  disjoint from its training), and discards by the exact expected points of
+  each split PLUS a second network's prediction of the keep's pegging
+  differential — the one component of a discard the exact evaluator cannot
+  rank per hold (v2: +0.78 pts/pair over v1 on the discard-isolated gate at
+  win-parity, and +0.008 wins/pair pooled over the positional fixtures). Both
+  networks are embedded in the binary.
 - `random` — a legal-random baseline.
 
 The registry is built to hold more as they graduate from the lab (see the
