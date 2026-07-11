@@ -61,6 +61,46 @@ func TestShowValueNoStarter(t *testing.T) {
 	}
 }
 
+// TestCeilingDivergesFromMean pins the ceiling rung apart from L2: on a hand
+// where the luckiest cut favors one keep but steady value favors another, the
+// max-over-starters pick and the mean-over-starters pick are different keeps —
+// and each strictly wins on its own objective (the crossover). Hand found by an
+// exhaustive sweep; the picks are stable and score-independent.
+func TestCeilingDivergesFromMean(t *testing.T) {
+	// 5S 4S QD 3S AS 6D: keeping 3-4-5-6 chases a luckiest cut of 16 (mean 9.87);
+	// keeping A-3-4-5 (four spades — a flush) has the higher expected value 11.24
+	// but a lower ceiling (14). The ceiling and mean rungs split here.
+	h := [6]cribbage.Card{
+		card(t, "5S"), card(t, "4S"), card(t, "QD"),
+		card(t, "3S"), card(t, "AS"), card(t, "6D"),
+	}
+	sp := Splits(h, false) // EHand/Ceil are score- and dealer-independent
+
+	ceilPick := pickMaxCeil(sp)
+	meanPick := pickMaxEHand(sp)
+	if ceilPick == meanPick {
+		t.Fatalf("expected the ceiling and mean picks to differ, both chose %v", ceilPick)
+	}
+
+	ceilSplit := findSplit(sp, ceilPick)
+	meanSplit := findSplit(sp, meanPick)
+
+	// The ceiling keep has the strictly higher luckiest cut...
+	if ceilSplit.Ceil <= meanSplit.Ceil {
+		t.Errorf("ceiling pick %v (Ceil=%.0f) should beat mean pick %v (Ceil=%.0f) on the max cut",
+			ceilPick, ceilSplit.Ceil, meanPick, meanSplit.Ceil)
+	}
+	// ...while the mean keep has the strictly higher expected value — so the
+	// greedy ceiling pick throws away expected value chasing the spike.
+	if meanSplit.EHand <= ceilSplit.EHand {
+		t.Errorf("mean pick %v (E=%.3f) should beat ceiling pick %v (E=%.3f) on expected value",
+			meanPick, meanSplit.EHand, ceilPick, ceilSplit.EHand)
+	}
+	t.Logf("ceiling keep %v: Ceil=%.0f E=%.3f | mean keep %v: Ceil=%.0f E=%.3f",
+		ceilSplit.Keep, ceilSplit.Ceil, ceilSplit.EHand,
+		meanSplit.Keep, meanSplit.Ceil, meanSplit.EHand)
+}
+
 // TestShowValueMatchesHandTotalWithDeadStarter cross-checks the no-starter
 // scorer against the proven five-card hand.Total: for a keep with no jack and a
 // DEAD starter (a card that forms no fifteen, pair, run, flush, or nobs with the
