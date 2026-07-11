@@ -26,6 +26,11 @@ Each **dimension** is one independent choice. Format:
   - **Today:** the current cribbager default.
   - *Depends on / conflicts with:* cross-dimension interactions.
 
+> **Review note (2026-07-10):** the "Today:" lines were spot-checked against
+> `web/public/src/ui/main.js` + `styles.css`. Most are accurate; corrections are
+> inlined below where a claim was incomplete or stale (`messages.advance`,
+> `dealer.indicator`, and the mobile-width baseline — see Review additions).
+
 "Mobile" ratings assume a ~375px-wide phone held portrait; "tablet" is treated as
 a small desktop unless noted. The hardest constraint everywhere is **horizontal
 width** — anything that grows sideways (per-player columns, side rails, wide card
@@ -51,7 +56,7 @@ pause/snappiness question — see "Cross-cutting: pacing" below.
   - `timed` — disappears/overwrites after a pause (current model; needs the pause).
   - `click` — the player clicks "OK/next" to advance when a message *would* be lost (opt-in for users who never want to miss a call). *(mobile: good — tap is natural.)*
   - `persist-log` — messages don't need catching because a per-hand log keeps them; the live line can then advance instantly. *(mobile: log can be a collapsible drawer.)*
-  - **Today:** `timed`.
+  - **Today:** `timed` **for pegging calls**, but the **show is already `click`** — the reveal is gated by a `Continue` button / space / Enter (`waitContinue` in `main.js`). So "Today" is really a *mix*, not pure `timed`; the two phases advance differently. *(Review note 2026-07-10.)*
   - *Note:* `persist-log` and `click` both largely remove the *need* for reading-window pauses (see pacing). A player option across these three is plausible.
 
 - **`messages.log`** — is there a reviewable history?
@@ -157,7 +162,7 @@ one of the biggest width/space levers, especially on mobile.
 
 - **`dealer.indicator`** — how "who deals / whose crib" is signaled.
   - `crib-space` — a labeled crib slot on the dealer's side of the board (current-ish). | `name-badge` — a flag/chip by the dealer's name. | `both`.
-  - **Today:** the crib appears in the dealer's pegging area during the show; a persistent explicit dealer flag is weak.
+  - **Today:** during the show the crib cards are revealed in the dealer's pegging area. **Correction (2026-07-10):** during *play* the dealer already gets a labeled dashed `crib` slot + starter on their pegging row (`deckGroup()` in `main.js`, drawn only when `state.dealer === p && !state.show`) — so a weak form of `crib-space` is *already Today*, not absent. What's genuinely missing is a **persistent, always-on** dealer flag (the `crib` slot vanishes at the show, and there's no name-badge). So the real gap is `name-badge`/`both`, not `crib-space` from zero.
   - *Note:* a clear always-on dealer indicator is a known newcomer gap (they don't track whose crib it is). Cheap, high-clarity win independent of the big redesign.
 
 ---
@@ -195,6 +200,18 @@ Phone-friendly defaults likely cluster as: `single`/`popup` messages,
 `unified` pegging, `overlap` cards, `one-at-a-time` show. That cluster is
 effectively a **Mobile Compact preset** (below).
 
+> **Mobile baseline correction (2026-07-10):** the newuser-journey H3 finding
+> ("cards overflow, pinch-zoom disabled, no `overflow-x`") is now *partly stale*.
+> `game.html` no longer sets `maximum-scale=1` (only `learn.html` still does), and
+> the `@media (max-width:560px)` block in `styles.css` now sets
+> `.pegged, .show-row { overflow-x: auto }` and `.felt/.table-inner { overflow-x:
+> hidden }`, with cards shrunk to `--card-w:52px`. So on a phone the play/show rows
+> now **scroll inside their zone** rather than clipping the page — U3 is *partially
+> in progress*, not untouched. The remaining problem is not "it clips" but "a
+> horizontally-scrolling pegging row is a poor phone interaction" — which is exactly
+> what the layout dimensions below (`unified` pegging, `count-only` opponent,
+> `numeric` board) are meant to remove. Frame U3 as *reflow*, not *rescue*.
+
 ### Presets / profiles
 Users won't tune 15 knobs. The realistic product is a few named presets that
 bundle choices, with advanced override. Candidate presets to design toward:
@@ -222,6 +239,151 @@ hard-coding it — a large effort, noted as the north star, not a near-term task
 
 ---
 
+## Review additions (2026-07-10)
+
+An independent critique-and-enrich pass. Everything below is *new* relative to the
+original draft; the sections above were left intact except for dated inline
+corrections. Nothing here renames an existing id — id changes are floated as
+suggestions only.
+
+### R1. Framing critiques (where the decomposition strains)
+
+1. **Several "dimensions" are entangled, not independent — the doc admits some but
+   not all.** The doc flags pacing↔messages and a few `Depends on`. Missed
+   couplings worth naming explicitly:
+   - `pegging.layout=unified` and `messages.display` are entangled through
+     *ownership* — a unified pile needs owner cues (tint/offset), which is the same
+     signal a `single` message area needs (who's speaking). Choose them together.
+   - `board.location` and `info.location` are **the same layout decision** viewed
+     twice: both compete for the vertical/edge budget. On a phone you can't put a
+     rail board *and* a rail info panel; picking one constrains the other. They read
+     as independent knobs but aren't.
+   - `opponent.hand` and `pegging.layout` jointly decide how many horizontal rows
+     exist. `count-only` + `unified` is one row; `show/full` + `per-player` is four.
+     The width budget is a *product*, not a sum, of these — the doc treats them
+     additively.
+
+2. **`opponent.hand-size` is a false sub-dimension.** `full` vs `small/mini` is a
+   continuous *scale factor*, not an enum, and it's really just card scaling applied
+   to one zone. Suggest folding it into a single `cards.scale` continuous setting
+   (see R3) rather than a per-zone enum — otherwise you'll grow a `*.hand-size` twin
+   for every zone.
+
+3. **`board.style` mixes two axes.** `numeric` vs `long` vs `classic` conflates
+   *metaphor* (board vs bare number) with *shape/footprint* (straight vs folded).
+   A "small straight board" and a "large straight board" are the same style at
+   different scale; "numeric" is a different *kind* of thing. Suggest splitting into
+   `board.metaphor` (`peg-board` | `numeric` | `hybrid`) × `board.shape`
+   (`straight` | `folded` | `rail`) × scale. As written, adding a "tiny board" forces
+   a new enum value instead of a scale tweak.
+
+4. **`starter.location` is nearly continuous and over-specified as 6 enums.** Six
+   compass positions relative to the board is really "an anchor + a side." It will
+   also *conflict* with `board.location` (a `left-rail` board can't take a
+   `left-of-board` starter cleanly). Consider `starter.anchor` (`board` | `pile` |
+   `hand`) + a derived side, rather than 6 absolute slots.
+
+5. **Naming collisions / schema hygiene for the future config:** `messages.log`
+   and a proposed game-event log; `info.location` vs `board.location` vs
+   `starter.location` all use bare compass words (`left-rail`, `top-bar`,
+   `above-board`) in *different value spaces* — a builder form will want a shared
+   `Placement` type so these validate consistently. And several "options" are
+   really **booleans dressed as enums** (`starter.label` labeled/unlabeled =
+   `starter.label: bool`; `pegging.round-sep` spaced/continuous = bool). Reserve
+   enums for genuinely 3+ mutually-exclusive choices; make the binaries booleans so
+   the settings UI renders them as toggles.
+
+6. **Mis-categorization: `show.scoring` is half interaction.** `explain-on-click`
+   is an *interaction* affordance (a tap target), while `total-only` /
+   `explain-always` are *display density*. They're bundled as one enum but a user
+   could plausibly want "always explain, but only on tap." Consider
+   `show.detail` (density) × `show.explain-trigger` (auto | click | off).
+
+7. **The doc is glib that presets are "just a named set of bindings."** True as
+   data, but presets also need **responsive fallthrough** (what happens when Desktop
+   Classic is opened on a 375px phone?) and **conflict resolution** (two bindings
+   that can't co-exist). A preset system is a small constraint-solver, not a dict.
+   Worth saying so before someone scopes it as trivial.
+
+### R2. New options inside existing dimensions
+
+- **`messages.display += rail-log`** — a persistent side/bottom transcript instead
+  of ephemeral bubbles (what BGA does with its move log). Strong desktop option.
+- **`pegging.layout += table-realistic`** — cards angled/fanned toward each seat
+  (the physical-table look), distinct from a flat `unified` stagger.
+- **`board.style += ring/circular`** and **`+= no-board`** (Cribbage Pro literally
+  ships "No Board" — scores by the avatar; this is your `numeric` validated in the
+  wild).
+- **`opponent.hand += fanned-back-mini`** — a tiny fanned card-back cluster that
+  reads as "a hand" for one-glance orientation without costing a full row.
+- **`show.sequence += dealer-suspense`** — reveal pone, then crib last (the
+  traditional "his crib" tension) as an explicit ordering, not just
+  `one-at-a-time`.
+- **`info.content += streak / mmr / title`** and **`+= turn-clock`** (see R3).
+- **`dealer.indicator += felt-rotation`** — rotate the whole table so the dealer is
+  always "you-side," a common physical convention; heavy but an option.
+
+### R3. Entirely new dimensions the draft is missing
+
+Ranked by value for the mobile redesign (H = high, worth designing now; M = medium;
+L = nice-to-have / later).
+
+- **`turn.indicator` (H)** — *how "it's your turn" is signaled.* Options:
+  `none` (today — implicit from enabled cards) | `highlight-seat` | `pulse-cards`
+  | `banner` | `arrow`. This is the single biggest missing dimension: newcomers
+  routinely don't know it's their move. On mobile a clear turn cue matters more than
+  any board style. Today cribbager signals turn only by which cards become clickable
+  — effectively `none`.
+- **`count.display` (H)** — *how the running count-to-31 is shown.* Options:
+  `spoken-only` (today — it's embedded in the call text "15 for 2") | `persistent-number`
+  (a live "Count: 22" chip) | `on-pile` (number rendered on the pegging pile) |
+  `both`. The draft catalogs *messages* and *pegging cards* but never the **count
+  itself**, which is the one number a player needs every second of the play. Big gap.
+- **`timer` (M)** — `none` (today) | `soft` (gentle nudge) | `hard` (turn clock,
+  needed for ranked/async). Entangled with `info.content` turn-clock display.
+- **`motion` (M)** — *is peg/card movement animated?* `instant` | `animated-peg`
+  (the peg physically travels the track — big teaching + delight value) |
+  `animated-cards`. Interacts with `prefers-reduced-motion` (already respected in
+  CSS) — so this needs an a11y override, making it a real dimension not just polish.
+- **`sound` (M)** and **`haptics` (M, mobile)** — `off` | `sfx` | `sfx+voice`
+  (Grandpas ships ambient + voice); haptic tap on peg/score. Accessibility-relevant
+  (non-visual turn/score cues) and a mobile expectation.
+- **`confirm-move` (M)** — `off` (today — tap a card = it's played) | `tap-tap`
+  | `drag-to-play` | `undo-window`. Fat-finger protection on mobile; also a
+  teaching-mode safety net. Currently an accidental tap is irreversible.
+- **`orientation` (H, mobile)** — `portrait` (target) | `landscape` |
+  `responsive-both`. The doc assumes portrait but never makes it a choosable axis;
+  landscape radically changes which layouts work (rails become viable again).
+- **`hand.sort` (M)** — `rank-then-suit` (today, per MEMORY convention) |
+  `by-suit` | `as-dealt` | `manual-reorder`. A real preference in physical play;
+  cheap to offer.
+- **`disconnect.resume` (H)** — *now that bot games resume on refresh, what does the
+  player see on return?* `silent-restore` (today) | `recap-banner` ("you're
+  mid-play, count is 22, your turn") | `replay-last-N`. The resume feature exists but
+  its *display* is unspecified; a returning player can be disoriented mid-hand.
+- **`handedness` (L)** — `right` (today, actions/rail on the right) | `left`
+  (mirror). Cheap once layout is config-driven; genuine accessibility/comfort win.
+- **`spectator` (L→M)** — `off` | `read-only-live` | `with-log`. Cribbage Pro ships
+  live spectating; relevant if human multiplayer grows.
+- **`colorblind` / `a11y.palette` (H as a11y, currently buried under `cards.design`)** —
+  promote to its own dimension: `default` | `deuteranopia` | `protanopia` |
+  `tritanopia` | `high-contrast`. It cross-cuts cards *and* peg/track colors and
+  you/bot call tints (`--you`/`--bot`), so it's not a card-skin sub-option — it's a
+  global theme axis.
+- **`font.scale` (H as a11y)** — the doc mentions font scaling in Accessibility prose
+  but never gives it an id; it belongs as a first-class continuous setting.
+
+### R4. Honest "not worth it (yet)" list
+
+`handedness`, `spectator`, `felt-rotation`, and the full `board.metaphor×shape×scale`
+refactor are real but low-ROI until (a) human multiplayer matters and (b) the game
+view is already config-driven. Flagging so they don't inflate U3 scope. The
+high-value cluster for the *mobile* problem is narrow: `turn.indicator`,
+`count.display`, `opponent.hand=count-only`, `board.style=numeric/no-board`,
+`orientation`, plus `disconnect.resume` recap.
+
+---
+
 ## Competitor scan (to fill in)
 
 Placeholder to record what shipping cribbage apps/venues actually do per
@@ -231,9 +393,29 @@ board style/location, opponent-hand visibility, message model, show sequence,
 and mobile layout. Divergences from our defaults are candidate options worth
 stealing.
 
+Filled 2026-07-10 from web research. Cited claims link a source; where an app's
+internal UI could not be verified from the open web, it is marked *(not web-verified)*
+rather than guessed — those need a hands-on survey (install + screenshot) to confirm.
+
 | App | Board | Opp hand | Messages | Show | Mobile layout |
 |-----|-------|----------|----------|------|---------------|
-| _(tbd)_ | | | | | |
+| **Cribbage Pro** (Fuller Systems)[^cp1][^cp2] | Non-standard track; **scores shown next to each player's avatar**. Offers a **"No Board"** mode (reclaims play area) and a **"Tournament Style"** board — i.e. board style is a *user option*, incl. a numeric-only-ish fallback. | Hidden in play; **opponent's hands shown in the post-game Game Summary**; live **spectate** of friends' games (beta). | Avatar-anchored; count can be **auto or self-counted (muggins)**. | Post-game summary lists hands/scores. *(In-game show sequence not web-verified.)* | iOS/Android/Mac native; "No Board" exists specifically to free up screen area — validates our `board.style=numeric` mobile bet. |
+| **Cribbage With Grandpas**[^cwg1][^cwg2] | Board **borders/frames the screen edge** (not a central slab). | Character opponent ("Grandpa") at a virtual table; hand hidden until show *(not web-verified)*. | Warm character voice + **ambient sound**; narration themed to the chosen setting. | *(Not web-verified.)* | **Explicitly portrait, one-handed play**; "large cards and buttons… perfect for small screens or big fingers." The clearest mobile-first exemplar. |
+| **Cribbage Classic**[^cc1] | Standard board *(not web-verified)*. | *(Not web-verified.)* | Hint system flags **sub-optimal plays**. | **Manual-count option (teaching) vs "fast mode" full auto-count.** | iPhone-native. Orientation not web-verified. |
+| **MSN / Microsoft Cribbage**[^ms1] | Standard board in browser. | Hidden until show. | Terse. | **Count-it-yourself or auto** ("fast mode… counting is done for you"). | Browser; responsive-ish. Specifics not web-verified. |
+| **Board Game Arena**[^bga1] | Peg **board shows each player's score**; standard rules. | Hidden until show (real-table model). | Play announces **cumulative count aloud** ("four", "eleven", …) as log lines. | Standard show/counting per rules. *(Exact UI not web-verified.)* | Browser; BGA's generic responsive shell, not cribbage-tuned. |
+| **CardGames.io** ("Bill" AI)[^cg1] | **Custom-made board**, HTML/CSS/JS + jQuery animations. | Hidden until show. | Minimal; **auto-count** (casual, frictionless). | Auto. | Browser + native wrapper; the frictionless-instant benchmark (no install, vs AI or human). |
+| **BSD `cribbage`** (open-source, text)[^bsd1] | **ASCII text** board. | Opponent hand hidden; you're prompted for plays. | Text prompts; **self-count / muggins** is the classic model. | Text, self-counted. | N/A (terminal). Useful as the *minimal `numeric`/`count-only` extreme*. *(UI details not fully web-verified this pass.)* |
+
+[^cp1]: Cribbage Corner Android review — board layout, avatar-anchored scores, difficulty. https://cribbagecorner.com/android-cribbage/
+[^cp2]: Cribbage Pro — official site / App Store (No Board & Tournament board options, spectate, Game Summary). https://www.cribbagepro.net/ , https://apps.apple.com/us/app/cribbage-pro/id409644287
+[^cwg1]: Android Central review — portrait one-handed, large cards/buttons, board frames screen. https://www.androidcentral.com/cribbage-grandpas-review
+[^cwg2]: Cribbage With Grandpas — official site. https://cribbagewithgrandpas.com/
+[^cc1]: Cribbage Classic — App Store / Microsoft Store (manual vs fast auto-count, hint system). https://apps.apple.com/us/app/cribbage-classic/id901900997
+[^ms1]: Games from MSN — Cribbage (browser, count-yourself or auto). https://www.msn.com/en-us/play/games/cribbage/cg-9pjpfs62v92r
+[^bga1]: Board Game Arena — Cribbage game help (score board, cumulative-count announcements). https://en.doc.boardgamearena.com/Gamehelpcribbage
+[^cg1]: CardGames.io — Cribbage (custom board, jQuery animations, vs Bill AI or human). https://cardgames.io/cribbage/
+[^bsd1]: BSD games `cribbage` (Linux). https://cribbagecorner.com/linux/ , https://www.linuxjournal.com/content/counting-cards-cribbage
 
 ---
 
@@ -248,3 +430,46 @@ stealing.
 - Minimum set for a **first mobile-playable** board (backlog U3): almost
   certainly numeric/tiny board + count-only opponent + single/popup messages +
   unified or single-column pegging. Confirm before U3 design.
+
+### Added 2026-07-10
+
+**Decisions only the owner can make (product calls):**
+- **Mobile-first or desktop-derived?** The competitor evidence leans mobile-first:
+  the best-loved app (Grandpas) is portrait-one-handed by design, and Cribbage Pro
+  ships a "No Board" mode *to reclaim phone space*. Is the owner willing to make the
+  **Mobile Compact cluster the canonical layout** and treat desktop as the enhanced
+  variant — or keep Desktop Classic as truth? This choice gates the entire U3 shape.
+- **Which dimensions are user-options vs. fixed design decisions?** Over-optioning
+  has real cost (settings UI, test matrix, support). Proposed default split: ship
+  **a11y axes** (`colorblind`, `font.scale`, `motion`, `confirm-move`, message
+  persistence) and **`hand.sort`** as user options; keep **layout** dimensions
+  (`board.location`, `pegging.layout`, `info.location`) as *preset-level*, not
+  free knobs. Owner sign-off needed.
+- **Is the gameplay builder worth building?** The doc calls it the north star. My
+  read: **defer it.** Hand-pick 2–3 presets (Desktop Classic, Mobile Compact,
+  Beginner) and hard-code them first; only build the builder if empirical preset
+  tuning proves it's needed. The config-driven-renderer refactor it requires is the
+  expensive part and can be earned incrementally.
+- **Is `turn.indicator` a bug or a dimension?** Today "it's your turn" is signaled
+  only by cards becoming clickable (effectively `none`). Should a clear turn cue ship
+  as a *fix now* (independent of U3), like the always-on dealer indicator?
+- **How authentic vs. assisted is the default?** `count.display=spoken-only` and
+  self-imposed counting are the "silent veteran" stance; competitors overwhelmingly
+  offer **auto-count + a persistent count number**. Does the owner want a persistent
+  running-count chip by default, or keep it embedded in the call text?
+
+**Things research / a hands-on survey can resolve (not owner judgment):**
+- The competitor table has several *(not web-verified)* cells (in-game show
+  sequencing, opponent-hand handling for Grandpas/Classic/BGA). Resolve by
+  **installing 2–3 apps and screenshotting** rather than more web search.
+- Does any shipping app animate the **peg traveling the track** (motion dimension),
+  and is it valued? Verify before investing in `motion=animated-peg`.
+- What do apps show on **disconnect/resume** mid-hand? Directly informs
+  `disconnect.resume`.
+
+**Schema questions (from R1, resolve before the config exists):**
+- Adopt a shared `Placement` type across `*.location` dimensions? Convert the
+  boolean-shaped enums (`starter.label`, `pegging.round-sep`) to actual booleans?
+- Split `board.style` into metaphor × shape × scale, and fold `opponent.hand-size`
+  into a single `cards.scale`? (Prevents an enum-explosion as tiny/mini variants
+  multiply.)
