@@ -25,6 +25,7 @@ import (
 
 	"github.com/cribbager/cribbager/internal/bot/eval"
 	"github.com/cribbager/cribbager/internal/cribbage"
+	"github.com/cribbager/cribbager/internal/scoring/hand"
 )
 
 // ShowValueNoStarter is the intrinsic show value of four kept cards with NO
@@ -95,20 +96,62 @@ type Split struct {
 	Discard [2]cribbage.Card
 	Keep    [4]cribbage.Card
 	Show    int     // L1: intrinsic no-starter show value of the keep
-	EHand   float64 // L2: exact expected hand value over all 46 starters
+	EHand   float64 // L2: exact mean hand value over all 46 starters
+	Ceil    float64 // L1c: BEST-case hand value — max over the 46 starters (the luckiest cut)
 	Crib    float64 // signed uniform-opponent crib EV of the discard (+dealer, −pone)
 	Score   float64 // L3: EHand + Crib
 }
 
+// startersFor returns the 46 possible starters for a dealt six-card hand: the
+// deck minus the six cards. Every keep drawn from this hand sweeps the same 46
+// starters (the kept four are a subset of the six), so the harness builds this
+// once per hand and shares it across all 15 holds.
+func startersFor(h [6]cribbage.Card) []cribbage.Card {
+	out := make([]cribbage.Card, 0, 46)
+	for _, c := range cribbage.Deck() {
+		inHand := false
+		for _, hc := range h {
+			if hc == c {
+				inHand = true
+				break
+			}
+		}
+		if !inHand {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// meanMaxHandValue sweeps the given starters once, returning both the MEAN
+// (L2's objective, identical to eval.ExpectedHandValue over the same set) and
+// the MAX (L1c's objective — the single luckiest cut). One pass so the ceiling
+// costs no extra starter sweep beyond the mean the harness already pays.
+func meanMaxHandValue(keep [4]cribbage.Card, starters []cribbage.Card) (mean, ceil float64) {
+	if len(starters) == 0 {
+		return 0, 0
+	}
+	sum, mx := 0, 0
+	for _, s := range starters {
+		t, _ := hand.Total(keep, s, false)
+		sum += t
+		if t > mx {
+			mx = t
+		}
+	}
+	return float64(sum) / float64(len(starters)), float64(mx)
+}
+
 // Splits enumerates all 15 holds in the canonical discardPairs order (i<j over
-// the six cards), computing each rung's objective. The expensive term
-// (ExpectedHandValue, a 46-starter sweep) is computed once here and shared by
-// L2 and L3, so the harness pays it a single time per hand.
+// the six cards), computing each rung's objective. The 46-starter sweep is done
+// once per hold (yielding both the mean and the max), so L1c, L2, and L3 share
+// one pass.
 func Splits(h [6]cribbage.Card, dealer bool) []Split {
 	sign := -1.0
 	if dealer {
 		sign = 1.0
 	}
+	starters := startersFor(h)
 	out := make([]Split, 0, 15)
 	for i := 0; i < 6; i++ {
 		for j := i + 1; j < 6; j++ {
@@ -120,13 +163,14 @@ func Splits(h [6]cribbage.Card, dealer bool) []Split {
 					n++
 				}
 			}
-			eHand := eval.ExpectedHandValue(keep, h[:])
+			eHand, ceil := meanMaxHandValue(keep, starters)
 			crib := sign * eval.CribEV(h[i], h[j])
 			out = append(out, Split{
 				Discard: [2]cribbage.Card{h[i], h[j]},
 				Keep:    keep,
 				Show:    ShowValueNoStarter(keep),
 				EHand:   eHand,
+				Ceil:    ceil,
 				Crib:    crib,
 				Score:   eHand + crib,
 			})
@@ -154,6 +198,16 @@ func pickMaxEHand(sp []Split) [2]cribbage.Card {
 	best := 0
 	for i := 1; i < len(sp); i++ {
 		if sp[i].EHand > sp[best].EHand {
+			best = i
+		}
+	}
+	return sp[best].Discard
+}
+
+func pickMaxCeil(sp []Split) [2]cribbage.Card {
+	best := 0
+	for i := 1; i < len(sp); i++ {
+		if sp[i].Ceil > sp[best].Ceil {
 			best = i
 		}
 	}
@@ -232,6 +286,22 @@ func Ladder(seed int64) []Discarder {
 				d, _ := eval.BestDiscardWin(h, dealer, my, opp)
 				return d
 			},
+		},
+	}
+}
+
+// CeilingRung is the greedy best-case evaluator — an OFF-LADDER rung that sits
+// conceptually beside L1/L2. It keeps the four cards whose single luckiest cut
+// is highest: argmax over the 15 holds of max-over-46-starters hand value. It is
+// NOT part of the monotonic Ladder (so Experiment 2's chain is unchanged); it is
+// a named policy the agreement experiment measures against L1, L2, and L4. The
+// contrast with L2 (which maximizes the MEAN over the same 46 starters) is the
+// point: the ceiling chases an unlikely spike, L2 chases steady value.
+func CeilingRung() Discarder {
+	return Discarder{
+		Name: "L1c-ceiling",
+		Discard: func(h [6]cribbage.Card, dealer bool, _, _ int) [2]cribbage.Card {
+			return pickMaxCeil(Splits(h, dealer))
 		},
 	}
 }

@@ -95,6 +95,11 @@ func TestLadderAgreement(t *testing.T) {
 	agreeTop := make([]int, 5)
 	inReach := 0
 
+	// Ceiling rung (L1c): the greedy best-case pick, off the monotonic ladder,
+	// measured against the mean (L2), the floor (L1), and the champion (L4).
+	var ceilVsMean, ceilVsFloor, ceilVsTop, ceilDisN int
+	var ceilGapSum float64 // Σ over ceil≠mean of (E[mean pick] − E[ceil pick])
+
 	// Reusable ladder (L0's RNG is separate from the dealing RNG).
 	rungs := Ladder(seed + 1)
 
@@ -146,6 +151,21 @@ func TestLadderAgreement(t *testing.T) {
 					agreeTop[r]++
 				}
 			}
+
+			// Ceiling: greedy luckiest-cut pick (score-independent).
+			ceilPick := pickMaxCeil(sp)
+			if ceilPick == picks[L2] {
+				ceilVsMean++
+			} else {
+				ceilDisN++
+				ceilGapSum += eHandOf(picks[L2]) - eHandOf(ceilPick) // E-value the greedy pick forfeits
+			}
+			if ceilPick == picks[L1] {
+				ceilVsFloor++
+			}
+			if ceilPick == picks[L4] {
+				ceilVsTop++
+			}
 		}
 	}
 
@@ -172,7 +192,89 @@ func TestLadderAgreement(t *testing.T) {
 	for r := L0; r <= L3; r++ {
 		fmt.Fprintf(&b, "  %-12s %6.2f%%\n", rungs[r].Name, 100*float64(agreeTop[r])/float64(decisions))
 	}
+
+	ceilGapDis := 0.0
+	if ceilDisN > 0 {
+		ceilGapDis = ceilGapSum / float64(ceilDisN)
+	}
+	fmt.Fprintf(&b, "\nceiling rung (L1c = argmax luckiest cut over 46 starters):\n")
+	fmt.Fprintf(&b, "  ceiling vs L2-mean : agree %6.2f%%   mean E[hand] the greedy pick throws away on disagreements %+.4f\n",
+		100*float64(ceilVsMean)/float64(decisions), ceilGapDis)
+	fmt.Fprintf(&b, "  ceiling vs L1-floor: agree %6.2f%%\n", 100*float64(ceilVsFloor)/float64(decisions))
+	fmt.Fprintf(&b, "  ceiling vs L4-champ: agree %6.2f%%\n", 100*float64(ceilVsTop)/float64(decisions))
 	t.Log(b.String())
+
+	t.Log(ladderEndgameSlice(t, full, n, seed))
+}
+
+// ladderEndgameSlice is the Experiment 1 endgame block: it restricts to
+// positions where the decider is clearly BEHIND and in reach (my∈[90,112],
+// opp∈[my+8,120], both dealer roles) and reports how often the champion's pick
+// (L4) matches the CEILING (upside) pick versus the MEAN (L2) pick — the
+// hypothesis being that the champion leans toward upside when trailing. The
+// discriminating rows (ceiling≠mean) are where the two hypotheses actually
+// separate. Deterministic: its own seed stream, capped hand count.
+func ladderEndgameSlice(t *testing.T, full []cribbage.Card, n int, seed int64) string {
+	t.Helper()
+	egN := n
+	if egN > 50000 { // a "slice" — bound the cost of the win-walk here
+		egN = 50000
+	}
+	egRng := rand.New(rand.NewSource(seed + 777))
+	rungs := Ladder(seed + 778)
+
+	var decisions, l4Ceil, l4Mean, ceilEqMean int
+	var discrim, dl4Ceil, dl4Mean int
+	for i := 0; i < egN; i++ {
+		deck := append([]cribbage.Card(nil), full...)
+		h := deal6(deck, egRng)
+		for _, dealer := range []bool{false, true} {
+			my := 90 + egRng.Intn(23)            // [90,112]
+			opp := my + 8 + egRng.Intn(121-my-8) // [my+8, 120]
+			if !eval.InReach(my, opp, dealer) {
+				continue
+			}
+			sp := Splits(h, dealer)
+			l4 := rungs[L4].Discard(h, dealer, my, opp)
+			cp := pickMaxCeil(sp)
+			mp := pickMaxEHand(sp)
+			decisions++
+			if l4 == cp {
+				l4Ceil++
+			}
+			if l4 == mp {
+				l4Mean++
+			}
+			if cp == mp {
+				ceilEqMean++
+				continue
+			}
+			discrim++
+			if l4 == cp {
+				dl4Ceil++
+			}
+			if l4 == mp {
+				dl4Mean++
+			}
+		}
+	}
+
+	pct := func(num, den int) float64 {
+		if den == 0 {
+			return 0
+		}
+		return 100 * float64(num) / float64(den)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n=== Experiment 1b: ENDGAME slice — decider clearly BEHIND & in reach ===\n")
+	fmt.Fprintf(&b, "positions: my∈[90,112], opp∈[my+8,120], both dealer roles   hands=%d  decisions=%d\n", egN, decisions)
+	fmt.Fprintf(&b, "  champion (L4) matches ceiling (upside) pick : %6.2f%%\n", pct(l4Ceil, decisions))
+	fmt.Fprintf(&b, "  champion (L4) matches mean (L2) pick        : %6.2f%%\n", pct(l4Mean, decisions))
+	fmt.Fprintf(&b, "  (ceiling and mean already agree on            %6.2f%% of these decisions)\n", pct(ceilEqMean, decisions))
+	fmt.Fprintf(&b, "  among the %d discriminating decisions (ceiling≠mean):\n", discrim)
+	fmt.Fprintf(&b, "    L4 == ceiling (upside) : %6.2f%%\n", pct(dl4Ceil, discrim))
+	fmt.Fprintf(&b, "    L4 == mean             : %6.2f%%\n", pct(dl4Mean, discrim))
+	return b.String()
 }
 
 // findSplit returns the split whose discard is the given (unordered) pair.
