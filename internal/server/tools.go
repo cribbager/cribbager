@@ -33,6 +33,15 @@ type discardEvalRequest struct {
 // AND the situation is in reach of 121 (situation.endgame true); otherwise it is
 // a true 0, kept on the wire (never omitempty) so clients needn't special-case a
 // missing field (see TestDeltaNumericFieldsAlwaysPresent for the convention).
+//
+// The distribution block (HandDist + the three derived upside summaries) exposes
+// the "upside" dimension EV alone hides: two holds with the same mean can have very
+// different right tails, and a fat tail is what you want late in a game when only a
+// big hand counts you out. It describes the HAND score only (the kept four over
+// every starter); the crib is a separate signed term with its own distribution,
+// deliberately NOT convolved in here — hand+crib convolution is a documented future
+// extension. All four fields are always present (never omitempty), same convention
+// as Win.
 type rankedHold struct {
 	Throw  [2]cribbage.Card `json:"throw"`   // the two cards sent to the crib
 	Keep   [4]cribbage.Card `json:"keep"`    // the four kept
@@ -40,6 +49,55 @@ type rankedHold struct {
 	CribEV float64          `json:"crib_ev"` // expected crib value, signed (+ yours, − theirs)
 	EV     float64          `json:"ev"`      // hand_ev + crib_ev — the ranked score
 	Win    float64          `json:"win"`     // P(win) with this hold (0 unless endgame)
+
+	// HandDist is the exact probability of each hand show score 0..29 for the kept
+	// four, swept over every possible starter — the same sweep as HandEV, so its
+	// probability-weighted mean equals HandEV. A fixed-length array, always present,
+	// with entries summing to ~1 (rounded per-entry for the wire).
+	HandDist [eval.HandScoreDistSize]float64 `json:"hand_dist"`
+	// HandPGE12 is P(hand score ≥ 12): the chance of a "big" hand once the starter is
+	// cut. 12 is roughly the top decile of hand-only outcomes (a random keep averages
+	// ~4–5), so it is the threshold at which a hand is large enough to matter when you
+	// are chasing a count-out. This is the headline right-tail / upside metric.
+	HandPGE12 float64 `json:"hand_p_ge_12"`
+	// HandP90 is the 90th-percentile hand score: the smallest score s with P(hand ≤ s)
+	// ≥ 0.90. A robust "realistic ceiling" — the good-cut outcome you can actually
+	// expect, less noisy than the absolute maximum.
+	HandP90 int `json:"hand_p90"`
+	// HandCeiling is the maximum hand score attainable over any starter (the highest
+	// score with nonzero probability) — the best case if the cut cooperates.
+	HandCeiling int `json:"hand_ceiling"`
+}
+
+// bigHandThreshold is the score at or above which a hand counts as "big" for the
+// upside metric HandPGE12 — see that field's doc for the rationale.
+const bigHandThreshold = 12
+
+// handUpside derives the three upside summaries from a hand-score distribution
+// (probabilities over scores 0..29). It returns the per-entry-rounded histogram for
+// the wire alongside P(score ≥ bigHandThreshold), the 90th-percentile score, and the
+// ceiling (highest score with any probability). Deriving these server-side keeps the
+// definitions in one place so no two clients disagree on what "upside" means.
+func handUpside(dist [eval.HandScoreDistSize]float64) (wire [eval.HandScoreDistSize]float64, pGE12 float64, p90, ceiling int) {
+	cum := 0.0
+	p90 = -1
+	for s, p := range dist {
+		wire[s] = round6(p)
+		if s >= bigHandThreshold {
+			pGE12 += p
+		}
+		cum += p
+		if p90 < 0 && cum >= 0.90 {
+			p90 = s
+		}
+		if p > 0 {
+			ceiling = s
+		}
+	}
+	if p90 < 0 { // guard: an empty (all-zero) distribution has no percentile
+		p90 = 0
+	}
+	return wire, round6(pGE12), p90, ceiling
 }
 
 // discardSituation describes the game position the discard is evaluated in, for
@@ -125,13 +183,21 @@ func (s *Server) handleDiscardEval(w http.ResponseWriter, r *http.Request) {
 
 	holds := make([]rankedHold, len(ranked))
 	for i, rd := range ranked {
+		// The distribution sweeps the same starters as EHand (seen = the six dealt
+		// cards), so its mean equals HandEV — the histogram is the same computation
+		// kept un-collapsed. Derive the upside summaries from it here.
+		dist, pGE12, p90, ceiling := handUpside(eval.HandValueDist(rd.Keep, h[:]))
 		holds[i] = rankedHold{
-			Throw:  rd.Discard,
-			Keep:   rd.Keep,
-			HandEV: round4(rd.EHand),
-			CribEV: round4(rd.Crib),
-			EV:     round4(rd.Score),
-			Win:    round6(rd.Win),
+			Throw:       rd.Discard,
+			Keep:        rd.Keep,
+			HandEV:      round4(rd.EHand),
+			CribEV:      round4(rd.Crib),
+			EV:          round4(rd.Score),
+			Win:         round6(rd.Win),
+			HandDist:    dist,
+			HandPGE12:   pGE12,
+			HandP90:     p90,
+			HandCeiling: ceiling,
 		}
 	}
 	writeJSON(w, http.StatusOK, discardEvalResponse{Hand: req.Hand, Dealer: req.Dealer, Holds: holds, Situation: situation})

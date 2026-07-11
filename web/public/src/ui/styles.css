@@ -785,6 +785,39 @@ button:active { transform: translateY(1px); }
 .de-table th.is-lens, .de-table td.is-lens { background: var(--color-success-bg); }
 .de-table th { color: var(--color-ink-muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px; }
 
+/* --- Score-distribution charts (A9 upside) --- */
+/* Rows are clickable to pick which hold's distribution the chart below expands. */
+.de-row { cursor: pointer; }
+.de-row:hover { background: var(--color-felt); }
+.de-row:focus-visible { outline: 2px solid var(--color-gold); outline-offset: -2px; }
+.de-row.is-selected { background: var(--color-call-you-bg); }
+.de-row.is-selected.is-you { background: var(--color-call-you-bg); }
+.de-td-shape { padding-top: 2px; padding-bottom: 2px; }
+
+/* One accent hue carries magnitude; the tail is an annotation band, not a 2nd hue. */
+.de-mini { display: block; }
+.de-bar { fill: var(--color-accent); }
+.de-tail { fill: var(--color-accent); opacity: 0.08; }
+.de-rule { stroke: var(--color-ink-muted); stroke-width: 1; }
+.de-rule-faint { stroke: var(--color-border-dashed); stroke-dasharray: 2 2; }
+.de-mean { stroke: var(--color-player-you); stroke-width: 1.5; }
+.de-axis { stroke: var(--color-border); stroke-width: 1; }
+.de-tick, .de-anno { fill: var(--color-ink-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.de-anno { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+.de-anno-mean { fill: var(--color-player-you); }
+.de-bar-label { fill: var(--color-ink); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.de-dist { display: flex; flex-direction: column; gap: var(--space-3); }
+.de-dist-head { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.de-dist-keep { font-weight: 700; color: var(--color-ink); }
+.de-chart-wrap { overflow-x: auto; }
+.de-chart { display: block; }
+.de-stats { display: flex; flex-wrap: wrap; gap: var(--space-5); }
+.de-stat { display: flex; flex-direction: column; }
+.de-stat-value { font-size: var(--text-xl); font-weight: 800; color: var(--color-ink); }
+.de-stat-label { font-size: var(--text-xs); color: var(--color-ink-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.de-dist-note { margin: 0; color: var(--color-ink-muted); font-size: var(--text-sm); }
+
 /* === Hand Counting Tutorial (A6) — a standalone hand-counting practice page === */
 /* Reuses the discard trainer's pr- vocabulary (title/subtitle/board/badge);
    the show layout, the single control row, and the inline combo list are new. */
