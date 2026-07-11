@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -234,6 +235,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /games/{id}/abandon", s.handleAbandon)
 	mux.HandleFunc("GET /games/{id}/stream", s.handleStream)
 	if s.static != "" {
+		// Clean per-game URL: /game/{id} serves the single-page game client, so a
+		// hard refresh at that path loads the app (which reads the id from the path
+		// and resumes) instead of 404ing on a file that doesn't exist. This is a
+		// thin alias for the static game.html — the {id} is never used as a file
+		// path, so there's no traversal surface.
+		mux.HandleFunc("GET /game/{id}", s.handleGamePage)
 		mux.Handle("GET /", noCache(http.FileServer(http.Dir(s.static))))
 	}
 	// logRequests is the outermost wrapper so it observes the final status (after
@@ -343,6 +350,19 @@ func (s *Server) handleLobby(w http.ResponseWriter, _ *http.Request) {
 // can call it to populate a bot picker or validate a --bot flag.
 func (s *Server) handleBots(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, botsResponse{Bots: bot.Names(), Default: bot.DefaultName})
+}
+
+// handleGamePage serves the game client for the clean per-game URL /game/{id}.
+// The client reads the game id from the path and resumes the saved game (falling
+// back gracefully if it's gone). It revalidates like the other static assets so
+// an edited game.html is never served stale.
+func (s *Server) handleGamePage(w http.ResponseWriter, r *http.Request) {
+	if s.static == "" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeFile(w, r, filepath.Join(s.static, "game.html"))
 }
 
 // noCache makes the browser revalidate static assets on every load. The web
