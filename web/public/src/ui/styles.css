@@ -331,7 +331,12 @@ html, body {
 /* Crib cards must NOT overlap (they'd otherwise inherit .pegged's negative margin).
    The extra .pegged class raises specificity above the base + mobile overlap rules. */
 .pegged.show-crib > .card:not(:first-child) { margin-left: 0; }
-.show-hand .show-starter, .show-crib .show-starter { margin-left: 16px; }
+/* The starter sits a fixed gap after the cards in BOTH rows. The crib rule needs
+   enough specificity (0,4,0) to beat the crib's own overlap-reset above (also
+   0,4,0 but earlier) AND the base .pegged overlap rule (267, 0,3,0) — otherwise
+   the crib starter loses the 16px and jams against the crib cards (unlike the
+   hand, whose row has no competing negative-margin rule). */
+.show-hand .show-starter, .pegged.show-crib > .card.show-starter { margin-left: 16px; }
 .show-hand .show-score, .show-crib .show-score { margin-left: 12px; font-size: 24px; align-self: center; }
 .show-uncounted { margin-left: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); align-self: center; }
 
@@ -383,6 +388,16 @@ html, body {
 .card.selectable:hover { transform: translateY(-5px); }
 .card.selected { transform: translateY(-12px); border-color: var(--btn); box-shadow: var(--shadow-selected); }
 .card.legal { cursor: pointer; outline: 2px solid var(--btn); outline-offset: 1px; }
+/* The hover/selected lift (translateY, above) shifts a clickable card's hit box
+   upward, uncovering a strip at its rest-position bottom edge that falls through
+   to the .hand container (cursor: auto) — so the pointer flickers away there (and
+   the lost :hover makes the lift jitter). A transparent hit-area skirt below each
+   interactive card keeps its rest footprint covered, so the pointer stays and
+   :hover holds, without giving any non-interactive card a pointer. Sized to the
+   largest lift (12px, the selected state). */
+.card.selectable::after, .card.legal::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 12px;
+}
 .card.legal:hover { transform: translateY(-5px); }
 .card.dim { opacity: 0.4; }
 
