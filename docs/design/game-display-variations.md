@@ -64,8 +64,11 @@ This defines a spectrum every layout choice sits on:
 
 **Reframe the presets against this axis** (cleaner than the ad-hoc names in the
 Presets section): *Faithful/Coached* (instructional end) → *Standard* → *Compact*
-→ *Minimal* (efficient end). "Mobile-first vs desktop-derived" (an open question)
-is really "which end of this axis is canonical." The instructional value is real
+→ *Minimal* (efficient end). "Mobile-first vs desktop-derived" is really "which
+end of this axis is canonical" — **DECIDED (owner, 2026-07-10): mobile-first.**
+The efficient/minimal end is canonical and will emerge from the focused push to
+build a decent mobile interface (backlog U3); the instructional/faithful
+presentation becomes the enhanced desktop preset. The instructional value is real
 and worth preserving as an **option/preset**, not the only mode — the same game
 can present faithfully for a learner and minimally for a phone veteran.
 
@@ -85,11 +88,11 @@ Worked examples (the guidance the owner asked for):
 
 | Information | Necessary? | Deducible from… | Beginner (obvious) | Advanced (infer/subtle) |
 |---|---|---|---|---|
-| Opponent's hand | No | count of cards already played (13 − played − starter) | show a mini fanned back cluster | hide entirely — just the count, or nothing |
-| Opponent card *count* | Yes | plays so far | explicit "3 left" chip | small pip, or read off the pile |
-| Whose deal / crib | Yes | who dealt last / crib position | labeled crib slot + dealer flag by name | subtle dot by the dealer's name |
-| Running count to 31 | Yes | sum of the pile (hard mid-play) | persistent "Count: 22" chip | spoken in the call only (today) |
-| Whose turn | Yes | which cards are clickable (today — too subtle) | banner / seat highlight | pulse the actionable cards |
+| Opponent's hand | No | count of cards already played (13 − played − starter) | show a mini fanned back cluster | hide entirely — just a status line, or nothing |
+| Opponent card *count* | **No (owner, r2)** | plays so far (you can count what's been played) | explicit "3 left" chip | infer from the pile / not shown |
+| Whose deal / crib | Yes, but | who dealt last / crib position | labeled crib slot + dealer flag by name | **conveyed at discard time by the action copy** ("Discard to *your* / *opponent's* crib" — already Today); a subtle dot otherwise |
+| Running count to 31 | Yes | sum of the pile (hard mid-play) | persistent "Count: 22" chip | **spoken in the call only (today — the owner keeps this: it mirrors an in-person game)** |
+| Whose turn | Yes | which cards are clickable + **the opponent's spoken call** (today) | banner / seat highlight | **inferred from the opponent's speech (today — owner: this is by design, not a bug)** |
 | Starter | Yes | — (must be shown) | labeled "starter" | unlabeled, positioned by convention |
 | Scoring (why N points) | No (the total is) | the cards themselves | explain-always breakdown | total only, tap to explain |
 
@@ -98,6 +101,24 @@ show for beginners, allow inference for advanced; not-necessary → default off,
 offer as a teaching toggle.** This turns "how obvious should X be" from taste into
 a rule, and it's exactly what distinguishes a *Coached* preset from a *Minimal*
 one — same information model, different obviousness thresholds.
+
+**A third channel (owner, round 2 — the key refinement):** information doesn't
+have to live in a *persistent visual element* or be left to *inference*. Much of
+it can ride the **action / status / narration channel** — the button you're about
+to press, a one-line status message, or the spoken call:
+
+- *Whose crib* → the discard button already says "Discard to your / opponent's
+  crib." No separate persistent indicator strictly required.
+- *Opponent has discarded* → showing their card backs is one signal, but a
+  **"waiting for opponent to discard"** status line serves the same purpose and
+  costs no space (see the new `opponent.status` dimension).
+- *Whose turn* → the opponent's spoken count ("…for 2") is itself the hand-off
+  cue (owner: intentional, mimics the table).
+- *Running count* → embedded in the call, as at a real table (owner: keep).
+
+This channel is the backbone of the **efficient/minimal (mobile-first)** end of
+the axis: it lets the phone layout drop whole persistent elements without losing
+the information, because the information moves into copy the player already reads.
 
 ## Owner-added dimensions (2026-07-10)
 
@@ -133,6 +154,36 @@ independent review:
   an `on-select` hint preview (above) and for undo. (This restates the review's
   `confirm-move` dimension with the owner's explicit play-and-discard framing and
   the select-preview linkage; keep one id.)
+
+### Round 2 (owner, 2026-07-10)
+
+- **`opponent.status` (NEW dimension)** — a status line for what the opponent is
+  *doing right now*: `waiting-for-discard` | `waiting-for-play` |
+  `reviewing-score` | `generic` ("waiting for opponent…") | `off`. This is the
+  space-free alternative to `opponent.hand=show` for the one thing showing their
+  cards actually signals in a human game — *that they've discarded / are still
+  thinking*. Pairs with `opponent.hand=count-only`/`hide` on mobile: drop the card
+  row, keep the knowledge, in one text line. *(Bot games don't need it much — the
+  bot is instant; it earns its keep in human-vs-human.)*
+
+- **`opponent.hand` — refined role.** Showing the opponent's card backs currently
+  doubles as the "they have discarded" signal; `opponent.status` decouples that,
+  so `count-only`/`hide` becomes viable without losing the cue. And per the
+  information model above, the *count* itself is deducible — so `count-only` is a
+  convenience, not a necessity.
+
+- **`dealer.indicator` — refined.** Crib ownership is *already* conveyed by the
+  discard action copy ("Discard to your / opponent's crib"), so a persistent
+  crib/dealer indicator is **optional, not required** — a subtle name-badge for
+  beginners at most, nothing for veterans. Downgrades this from "gap to fill" to
+  "nice-to-have."
+
+- **`board.style` — numeric is additive, not exclusive.** Even *with* a board
+  shown, a plain **numeric score readout can coexist** (board for the metaphor +
+  a "97 – 88" number for at-a-glance reading). So `numeric` is better modeled as a
+  companion toggle (`board.numeric-readout: on/off`) than a mutually-exclusive
+  board style — reinforcing the review's split of `board.style` into
+  metaphor × readout.
 
 ---
 
@@ -528,6 +579,24 @@ rather than guessed — those need a hands-on survey (install + screenshot) to c
 - Minimum set for a **first mobile-playable** board (backlog U3): almost
   certainly numeric/tiny board + count-only opponent + single/popup messages +
   unified or single-column pegging. Confirm before U3 design.
+
+### Resolved by the owner (2026-07-10, round 2)
+
+- **Mobile-first or desktop-derived? → MOBILE-FIRST.** The efficient/minimal end
+  of the master axis is canonical; it comes out of the U3 mobile-interface effort.
+  Desktop/faithful becomes the enhanced preset.
+- **Build the gameplay builder? → DEFER.** "Pie-in-the-sky, more cool-factor than
+  need — like the board/card builder." Hand-pick presets; don't build the
+  config-driven renderer yet.
+- **Persistent running-count chip by default? → NO, keep spoken.** The count-in-
+  the-call model mirrors an in-person game and is kept (`count.display=spoken-only`).
+- **Is `turn.indicator` a fix-now bug? → NO.** Turn is inferred from the opponent's
+  spoken call, by design (mimics the table). Stays a *future option* for
+  beginner/mobile presets, not a bug.
+- **Which dimensions are user-options vs. fixed? → DEFER.** Don't decide the
+  option/preset split up front; let it fall out of exploring the designs.
+
+**(Historical analysis of these questions is preserved below.)**
 
 ### Added 2026-07-10
 
