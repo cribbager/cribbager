@@ -21,6 +21,7 @@
 package ladder
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/cribbager/cribbager/internal/bot/eval"
@@ -302,6 +303,56 @@ func CeilingRung() Discarder {
 		Name: "L1c-ceiling",
 		Discard: func(h [6]cribbage.Card, dealer bool, _, _ int) [2]cribbage.Card {
 			return pickMaxCeil(Splits(h, dealer))
+		},
+	}
+}
+
+// tailProb is P(hand score >= T) for the kept four over all 46 starters — the
+// exact right-tail mass of eval.HandValueDist. T<=0 is the whole distribution
+// (probability 1). This is the CORRECT formalization of "upside": the chance of
+// clearing a needed count, not the single luckiest cut the ceiling chases.
+func tailProb(keep [4]cribbage.Card, seen []cribbage.Card, T int) float64 {
+	if T <= 0 {
+		return 1
+	}
+	dist := eval.HandValueDist(keep, seen)
+	p := 0.0
+	for k := T; k < len(dist); k++ {
+		p += dist[k]
+	}
+	return p
+}
+
+// pickMaxTail is the argmax of tailProb over the 15 holds, ties broken toward
+// the higher mean hand value (so it degrades to the sensible pick when the tail
+// is flat) and then enumeration order — deterministic like the other picks.
+func pickMaxTail(sp []Split, seen []cribbage.Card, T int) [2]cribbage.Card {
+	best := 0
+	bestP := tailProb(sp[0].Keep, seen, T)
+	for i := 1; i < len(sp); i++ {
+		p := tailProb(sp[i].Keep, seen, T)
+		if p > bestP+1e-12 {
+			best, bestP = i, p
+		} else if p > bestP-1e-12 && sp[i].EHand > sp[best].EHand {
+			best = i
+		}
+	}
+	return sp[best].Discard
+}
+
+// ThresholdUpsideRung is the correctly-formalized "go for a big hand" evaluator:
+// it keeps the four cards that MAXIMIZE THE PROBABILITY the hand scores at least
+// T over the cut, P(hand >= T). Unlike the ceiling (which maximizes the single
+// luckiest starter and so rewards a hand that spikes once and busts otherwise),
+// this rewards a hand that clears the threshold OFTEN — which is what actually
+// wins games when you need points. An off-ladder rung; the desperation
+// experiment measures whether the champion shifts toward high-T picks when it is
+// behind and out of time.
+func ThresholdUpsideRung(T int) Discarder {
+	return Discarder{
+		Name: fmt.Sprintf("upside>=%d", T),
+		Discard: func(h [6]cribbage.Card, dealer bool, _, _ int) [2]cribbage.Card {
+			return pickMaxTail(Splits(h, dealer), h[:], T)
 		},
 	}
 }
