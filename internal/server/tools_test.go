@@ -96,6 +96,135 @@ func TestDiscardEvalBadInput(t *testing.T) {
 
 func intp(v int) *int { return &v }
 
+// TestDiscardEvalHandDistribution checks the additive upside block: every hold
+// carries a length-30 hand-score distribution that sums to ~1, whose mean equals
+// the hold's hand_ev (the histogram is the same sweep, un-collapsed), and whose
+// derived summaries (P≥12, p90, ceiling) agree with the raw histogram.
+func TestDiscardEvalHandDistribution(t *testing.T) {
+	c := newTestClient(t)
+	const handStr = "5H 5S 5C JH 2D 3C" // lets 5-5-5-J be one of the 15 holds
+	resp, data := c.do("POST", "/tools/discard-eval", "",
+		discardEvalRequest{Hand: mustHand(t, handStr), Dealer: true})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d %s", resp.StatusCode, data)
+	}
+	out := decode[discardEvalResponse](t, data)
+	if len(out.Holds) != 15 {
+		t.Fatalf("want 15 holds, got %d", len(out.Holds))
+	}
+
+	for i, hld := range out.Holds {
+		if len(hld.HandDist) != eval.HandScoreDistSize {
+			t.Fatalf("hold %d: dist length %d, want %d", i, len(hld.HandDist), eval.HandScoreDistSize)
+		}
+		// Probabilities sum to ~1 (per-entry rounding leaves a tiny residual).
+		sum, mean, tail := 0.0, 0.0, 0.0
+		ceiling := 0
+		for s, p := range hld.HandDist {
+			if p < 0 {
+				t.Fatalf("hold %d: negative probability %v at score %d", i, p, s)
+			}
+			sum += p
+			mean += float64(s) * p
+			if s >= bigHandThreshold {
+				tail += p
+			}
+			if p > 0 {
+				ceiling = s
+			}
+		}
+		if sum < 0.999 || sum > 1.001 {
+			t.Fatalf("hold %d: distribution sums to %v, want ~1", i, sum)
+		}
+		// The histogram is HandEV kept un-collapsed, so its mean must recover HandEV.
+		if diff := mean - hld.HandEV; diff > 2e-3 || diff < -2e-3 {
+			t.Fatalf("hold %d: dist mean %v vs hand_ev %v", i, mean, hld.HandEV)
+		}
+		// The derived summaries must match the raw histogram.
+		if diff := tail - hld.HandPGE12; diff > 1e-4 || diff < -1e-4 {
+			t.Fatalf("hold %d: recomputed P(>=12) %v vs hand_p_ge_12 %v", i, tail, hld.HandPGE12)
+		}
+		if hld.HandCeiling != ceiling {
+			t.Fatalf("hold %d: ceiling %d, raw histogram %d", i, hld.HandCeiling, ceiling)
+		}
+		// p90 is the smallest score with cumulative probability >= 0.90.
+		cum, wantP90 := 0.0, -1
+		for s, p := range hld.HandDist {
+			cum += p
+			if cum >= 0.90 {
+				wantP90 = s
+				break
+			}
+		}
+		if hld.HandP90 != wantP90 {
+			t.Fatalf("hold %d: p90 %d, want %d", i, hld.HandP90, wantP90)
+		}
+		// Sanity: a summary never exceeds the ceiling.
+		if hld.HandP90 > hld.HandCeiling {
+			t.Fatalf("hold %d: p90 %d above ceiling %d", i, hld.HandP90, hld.HandCeiling)
+		}
+	}
+}
+
+// TestDiscardEvalUpsideShape checks the pedagogical claim: the 5-5-5-J keep (three
+// fives + a jack) has a fat right tail — a real chance of a big hand and a high
+// ceiling — that a flat, safe keep from the same deal does not.
+func TestDiscardEvalUpsideShape(t *testing.T) {
+	c := newTestClient(t)
+	const handStr = "5H 5S 5C JH 2D 3C"
+	_, data := c.do("POST", "/tools/discard-eval", "",
+		discardEvalRequest{Hand: mustHand(t, handStr), Dealer: true})
+	out := decode[discardEvalResponse](t, data)
+
+	find := func(keep string) rankedHold {
+		cards := mustHand(t, keep)
+		var set [4]cribbage.Card
+		copy(set[:], cards)
+		for _, hld := range out.Holds {
+			match := 0
+			for _, k := range hld.Keep {
+				for _, w := range set {
+					if k == w {
+						match++
+					}
+				}
+			}
+			if match == 4 {
+				return hld
+			}
+		}
+		t.Fatalf("keep %q not among holds", keep)
+		return rankedHold{}
+	}
+
+	fat := find("5H 5S 5C JH")  // three fives + jack: pairs royal + fifteens, tens cut for more
+	flat := find("2D 3C 5H JH") // a scattered, low-upside keep from the same deal
+
+	if fat.HandPGE12 <= flat.HandPGE12 {
+		t.Fatalf("expected 5-5-5-J P(>=12) %v to exceed flat keep %v", fat.HandPGE12, flat.HandPGE12)
+	}
+	if fat.HandCeiling <= flat.HandCeiling {
+		t.Fatalf("expected 5-5-5-J ceiling %d to exceed flat keep %d", fat.HandCeiling, flat.HandCeiling)
+	}
+	if fat.HandPGE12 <= 0 {
+		t.Fatalf("5-5-5-J should have real right-tail mass, got P(>=12)=%v", fat.HandPGE12)
+	}
+}
+
+// TestDiscardEvalDistAlwaysPresent checks the numeric-fields-always-present
+// convention holds for the distribution block: hand_dist, hand_p_ge_12, hand_p90,
+// and hand_ceiling appear on every hold even for a scoreless request.
+func TestDiscardEvalDistAlwaysPresent(t *testing.T) {
+	c := newTestClient(t)
+	_, data := c.do("POST", "/tools/discard-eval", "",
+		discardEvalRequest{Hand: mustHand(t, "2C 5H 6D 9S JD QH"), Dealer: false})
+	for _, field := range []string{`"hand_dist"`, `"hand_p_ge_12"`, `"hand_p90"`, `"hand_ceiling"`} {
+		if got := strings.Count(string(data), field); got != 15 {
+			t.Fatalf("want %s on all 15 holds, found %d (%s)", field, got, data)
+		}
+	}
+}
+
 // TestDiscardEvalNoScoresShape checks the scoreless request keeps its original
 // wire shape plus the always-present win field: no situation block, and win
 // serialized as a literal 0 on every hold (numeric fields are never omitempty —
