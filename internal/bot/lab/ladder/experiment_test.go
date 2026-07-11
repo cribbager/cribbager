@@ -277,6 +277,139 @@ func ladderEndgameSlice(t *testing.T, full []cribbage.Card, n int, seed int64) s
 	return b.String()
 }
 
+// upsideThresholds are the P(hand >= T) cut-points the desperation experiment
+// measures the champion against: a good hand, a top-decile hand, a big hand.
+var upsideThresholds = []int{8, 12, 16}
+
+// sliceResult accumulates, over one position slice, how often the champion's
+// discard matches the mean pick, the ceiling pick, and each threshold-upside
+// pick — both overall and (per threshold) restricted to decisions where that
+// upside pick actually DIFFERS from the mean (the discriminating sample).
+type sliceResult struct {
+	name            string
+	decisions       int
+	matchMean       int
+	matchCeil       int
+	matchUp         map[int]int // T -> L4 == upside>=T (overall)
+	upDiffMean      map[int]int // T -> upside>=T pick != mean pick (discriminating count)
+	matchUpWhenDiff map[int]int // T -> among discriminating, L4 == upside>=T
+}
+
+func newSliceResult(name string) sliceResult {
+	return sliceResult{name: name, matchUp: map[int]int{}, upDiffMean: map[int]int{}, matchUpWhenDiff: map[int]int{}}
+}
+
+// runSlice samples N hands (both dealer roles), draws a position from sample,
+// and tallies champion agreement with mean / ceiling / each upside threshold.
+// Only in-reach positions count (out of reach the champion IS point-EV, so its
+// win-awareness — the thing we are testing — is dormant).
+func runSlice(name string, full []cribbage.Card, n int, seed int64, sample func(rng *rand.Rand) (my, opp int)) sliceResult {
+	res := newSliceResult(name)
+	rng := rand.New(rand.NewSource(seed))
+	rungs := Ladder(seed + 1)
+	for i := 0; i < n; i++ {
+		deck := append([]cribbage.Card(nil), full...)
+		h := deal6(deck, rng)
+		for _, dealer := range []bool{false, true} {
+			my, opp := sample(rng)
+			if !eval.InReach(my, opp, dealer) {
+				continue
+			}
+			sp := Splits(h, dealer)
+			l4 := rungs[L4].Discard(h, dealer, my, opp)
+			mean := pickMaxEHand(sp)
+			ceil := pickMaxCeil(sp)
+			res.decisions++
+			if l4 == mean {
+				res.matchMean++
+			}
+			if l4 == ceil {
+				res.matchCeil++
+			}
+			for _, T := range upsideThresholds {
+				up := pickMaxTail(sp, h[:], T)
+				if l4 == up {
+					res.matchUp[T]++
+				}
+				if up != mean {
+					res.upDiffMean[T]++
+					if l4 == up {
+						res.matchUpWhenDiff[T]++
+					}
+				}
+			}
+		}
+	}
+	return res
+}
+
+// TestLadderDesperate is Experiment 1c: does the champion shift toward the
+// threshold-upside pick — P(hand >= T), the correct formalization of "swing for
+// a big hand" — when it is genuinely desperate (behind, opponent nearly home),
+// versus a neutral even mid-game position? A rise in agreement with the high-T
+// upside pick from NEUTRAL to DESPERATE would confirm the champion swings when it
+// must; a flat/falling line suggests it does not (or that upside does not help
+// even there). Opt-in and deterministic.
+func TestLadderDesperate(t *testing.T) {
+	if !ladderEnabled("desperate") {
+		t.Skip("set LADDER=desperate (or LADDER=all) to run Experiment 1c")
+	}
+	n := envInt("N", 50000)
+	seed := envInt64("SEED", 5150)
+	full := cribbage.Deck()
+
+	// DESPERATE: decider behind, opponent almost home — only a big deal this hand
+	// keeps them alive. NEUTRAL: even, mid-board, no urgency.
+	desperate := runSlice("DESPERATE (behind ~90-110, opp ~116-120)", full, n, seed,
+		func(rng *rand.Rand) (int, int) {
+			my := 90 + rng.Intn(21)  // [90,110]
+			opp := 116 + rng.Intn(5) // [116,120]
+			return my, opp
+		})
+	neutral := runSlice("NEUTRAL (even, mid-board 40-80)", full, n, seed+333,
+		func(rng *rand.Rand) (int, int) {
+			my := 40 + rng.Intn(41) // [40,80]
+			opp := my - 4 + rng.Intn(9)
+			if opp < 0 {
+				opp = 0
+			}
+			return my, opp
+		})
+
+	pct := func(num, den int) float64 {
+		if den == 0 {
+			return 0
+		}
+		return 100 * float64(num) / float64(den)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n=== Experiment 1c: threshold-upside — desperate vs neutral ===\n")
+	fmt.Fprintf(&b, "hands=%d each × 2 roles; only in-reach positions counted.\n", n)
+	fmt.Fprintf(&b, "  NEUTRAL decisions=%d   DESPERATE decisions=%d\n\n", neutral.decisions, desperate.decisions)
+
+	fmt.Fprintf(&b, "champion (L4) pick matches …           %10s  %10s\n", "NEUTRAL", "DESPERATE")
+	fmt.Fprintf(&b, "%s\n", strings.Repeat("-", 60))
+	fmt.Fprintf(&b, "  mean (L2)                            %9.2f%%  %9.2f%%\n",
+		pct(neutral.matchMean, neutral.decisions), pct(desperate.matchMean, desperate.decisions))
+	fmt.Fprintf(&b, "  ceiling (luckiest cut)               %9.2f%%  %9.2f%%\n",
+		pct(neutral.matchCeil, neutral.decisions), pct(desperate.matchCeil, desperate.decisions))
+	for _, T := range upsideThresholds {
+		fmt.Fprintf(&b, "  upside>=%-2d  P(hand>=%d)               %9.2f%%  %9.2f%%\n", T, T,
+			pct(neutral.matchUp[T], neutral.decisions), pct(desperate.matchUp[T], desperate.decisions))
+	}
+
+	fmt.Fprintf(&b, "\nTHE SHIFT — on discriminating decisions (upside>=T pick ≠ mean pick),\n")
+	fmt.Fprintf(&b, "how often the champion sides with the upside pick over the mean:\n")
+	fmt.Fprintf(&b, "%-22s %20s  %20s\n", "", "NEUTRAL", "DESPERATE")
+	fmt.Fprintf(&b, "%s\n", strings.Repeat("-", 66))
+	for _, T := range upsideThresholds {
+		fmt.Fprintf(&b, "  upside>=%-2d            %8.2f%% (n=%-6d)  %8.2f%% (n=%-6d)\n", T,
+			pct(neutral.matchUpWhenDiff[T], neutral.upDiffMean[T]), neutral.upDiffMean[T],
+			pct(desperate.matchUpWhenDiff[T], desperate.upDiffMean[T]), desperate.upDiffMean[T])
+	}
+	t.Log(b.String())
+}
+
 // findSplit returns the split whose discard is the given (unordered) pair.
 func findSplit(sp []Split, d [2]cribbage.Card) Split {
 	for _, s := range sp {
