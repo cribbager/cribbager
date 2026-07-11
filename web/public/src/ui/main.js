@@ -13,6 +13,7 @@ import { cardFace } from './cardFace.js';
 import { buildBreakdownLines, breakdownList } from './comboBreakdown.js';
 import { GameClient } from '../net/client.js';
 import { mountHeader } from './header.js';
+import { gamePath, parseGameTarget } from './gameUrl.js';
 // HUMAN/BOT are UI positions: "me" at the bottom, the opponent at the top.
 const HUMAN = 0;
 const BOT = 1;
@@ -771,7 +772,13 @@ function hydrateFromSnapshot(snap) {
 
 // ---- vs the bot: a synchronous loop (the server drives the bot between my moves,
 // so the action response already carries the bot's replies as deltas) ----
-async function startGame() {
+//
+// A bot game is now persisted (saveGame, mode:'bot') and lives at its own clean
+// /game/<id> URL, so a refresh RESUMES the same game instead of re-reading
+// ?new=bot and spawning a brand-new one. startBot creates + animates the opening
+// deal; resumeBot rehydrates the board from a snapshot (no replay); both then
+// hand off to driveBot, the shared move loop.
+function setUpBotGame() {
     MY_SEAT = 0;
     oppLabel = 'Opponent';
     lastMode = 'bot';
@@ -781,16 +788,48 @@ async function startGame() {
     state = fresh();
     board.reset();
     clearControls();
+}
+
+async function startBot() {
+    setUpBotGame();
     render();
     const created = await client.create({ mode: 'bot' });
     const { game_id, player_token } = created;
-    curGameId = game_id; curToken = player_token; // for the Leave button (bot games aren't persisted/resumed)
-    const ctx = { starter: null, dealer: HUMAN, inPlay: false };
-    let snap = await client.snapshot(game_id, player_token);
-    ctx.dealer = snap.Dealer;
+    curGameId = game_id; curToken = player_token;
+    // Persist the game and move to its own URL so a refresh resumes it (the URL
+    // is swapped in place — no reload — so the freshly created game keeps running).
+    saveGame(game_id, { token: player_token, seat: MY_SEAT, mode: 'bot' });
+    history.replaceState(null, '', gamePath(game_id));
+    const snap = await client.snapshot(game_id, player_token);
+    const ctx = { starter: null, dealer: snap.Dealer, inPlay: false };
     await onEvent({ type: 'deal', dealer: snap.Dealer, hands: [CS(snap.YourHand), []] });
+    await driveBot(game_id, player_token, ctx);
+}
+
+async function resumeBot(gameId, token) {
+    setUpBotGame();
+    curGameId = gameId; curToken = token;
+    let snap;
+    // The saved game may be gone (reaped) or already finished — in either case
+    // drop the stale entry and start a fresh bot game rather than dead-ending.
+    try { snap = await client.snapshot(gameId, token); }
+    catch { clearGame(gameId); startBot(); return; }
+    if (snap.Winner != null) { clearGame(gameId); startBot(); return; }
+    // Paint the current board straight from the snapshot (no replay / re-deal),
+    // then drop into the move loop from the current decision point.
+    hydrateFromSnapshot(snap);
+    const ctx = { starter: state.starter, dealer: snap.Dealer, inPlay: state.inPlay };
+    await driveBot(gameId, token, ctx);
+}
+
+// driveBot is the shared move loop: snapshot → prompt the human for their discard
+// or play → POST it → animate the server's reply deltas (which already include the
+// bot's moves). It re-derives state from a fresh snapshot each iteration, so it is
+// safe to enter mid-game (a resumed hand) — it assumes no fresh deal. The game
+// always rests at a human decision or terminal between calls.
+async function driveBot(game_id, player_token, ctx) {
     while (true) {
-        snap = await client.snapshot(game_id, player_token);
+        const snap = await client.snapshot(game_id, player_token);
         if (snap.Winner != null) break;
         state.humanHand = CS(snap.YourHand);
         if (snap.Phase === 'discard' && snap.YourHand.length === 6) {
@@ -1039,27 +1078,27 @@ async function joinGame(gameId) {
     }
 }
 
-// boot routes the game page from the URL. There is no in-page menu anymore — an
-// unrecognized/empty URL bounces to the homepage.
+// boot routes the game page from the URL (?new=…, ?join=…, or an existing game id
+// from the clean /game/<id> path or ?game=…). There is no in-page menu anymore —
+// an unrecognized/empty URL bounces to the homepage.
 function boot() {
-    const params = new URLSearchParams(location.search);
-    const newMode = params.get('new');
-    if (newMode === 'bot') { startGame(); return; }
+    const { newMode, join, gameId } = parseGameTarget(location);
+    if (newMode === 'bot') { startBot(); return; }
     // "Challenge a friend" hosts a private open game reachable only by its link.
     if (newMode === 'open') { hostGame(); return; }
-    const join = params.get('join'); // a game id to join (or resume, if it's already ours)
-    if (join) {
+    if (join) { // a game id to join (or resume, if it's already ours)
         const mine = loadGame(join);
         if (mine && mine.token) { startMultiplayer(join, mine.token, mine.seat, { resume: true }); return; }
         joinGame(join);
         return;
     }
-    const gameId = params.get('game');
     if (gameId) {
         const saved = loadGame(gameId);
         if (saved && saved.token) {
-            // Resume after a refresh/drop (falls back to the homepage if it's gone —
-            // handled inside startMultiplayer).
+            // Resume after a refresh/drop. Bot games run a local drive loop; MP games
+            // reconnect the stream. Both fall back gracefully if the game is gone
+            // (handled inside resumeBot / startMultiplayer).
+            if (saved.mode === 'bot') { resumeBot(gameId, saved.token); return; }
             startMultiplayer(gameId, saved.token, saved.seat, { resume: true });
             return;
         }
