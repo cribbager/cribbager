@@ -38,6 +38,104 @@ rows) is the first thing to break on a phone.
 
 ---
 
+## The master axis: instructional ↔ efficient (owner directive, 2026-07-10)
+
+Before the individual dimensions, the lens that explains *why the current design
+is what it is* and gives the presets a principled ordering.
+
+**Today's design deliberately mimics over-the-board, in-person play — as a
+teaching aid.** It is optimized to help someone learn *physical* cribbage, not to
+be the most screen-efficient. The clearest tell is `pegging.layout = per-player`:
+each player's played cards sit in their own zone because, at a real table, you
+would **never** merge both players' cards into one staggered pile — you'd lose
+track of whose cards are whose when gathering them at the show. So the current
+per-player layout is *faithful to the physical game*, and a `unified` staggered
+pile — while more screen-efficient — is a screen-native convenience that has no
+over-the-table equivalent. Same logic runs through the whole current UI: it
+teaches the real game's shape.
+
+This defines a spectrum every layout choice sits on:
+
+- **Instructional / faithful** — mirrors the physical table, makes every element
+  explicit, teaches over-the-board play. Spends screen space to do it. (Today's
+  desktop design.)
+- **Efficient / minimal** — screen-native, shows only what's needed, lets the
+  skilled player infer the rest. Wins on mobile. (Where a phone layout must go.)
+
+**Reframe the presets against this axis** (cleaner than the ad-hoc names in the
+Presets section): *Faithful/Coached* (instructional end) → *Standard* → *Compact*
+→ *Minimal* (efficient end). "Mobile-first vs desktop-derived" (an open question)
+is really "which end of this axis is canonical." The instructional value is real
+and worth preserving as an **option/preset**, not the only mode — the same game
+can present faithfully for a learner and minimally for a phone veteran.
+
+## Information model: what's needed, when, and how obvious (owner directive, 2026-07-10)
+
+A method for deciding each element's treatment instead of choosing display
+options blind. For every piece of game information, ask three things:
+
+1. **Necessary?** Must the player have it to make the current decision?
+2. **Deducible?** Can a skilled player *infer* it from what's already on screen —
+   so showing it explicitly is a teaching aid, not a requirement?
+3. **Obvious ↔ inferable presentation?** Beginners want it explicit and
+   labeled; advanced players are fine with subtle (or nothing). This maps
+   directly onto the instructional↔efficient axis and onto presets.
+
+Worked examples (the guidance the owner asked for):
+
+| Information | Necessary? | Deducible from… | Beginner (obvious) | Advanced (infer/subtle) |
+|---|---|---|---|---|
+| Opponent's hand | No | count of cards already played (13 − played − starter) | show a mini fanned back cluster | hide entirely — just the count, or nothing |
+| Opponent card *count* | Yes | plays so far | explicit "3 left" chip | small pip, or read off the pile |
+| Whose deal / crib | Yes | who dealt last / crib position | labeled crib slot + dealer flag by name | subtle dot by the dealer's name |
+| Running count to 31 | Yes | sum of the pile (hard mid-play) | persistent "Count: 22" chip | spoken in the call only (today) |
+| Whose turn | Yes | which cards are clickable (today — too subtle) | banner / seat highlight | pulse the actionable cards |
+| Starter | Yes | — (must be shown) | labeled "starter" | unlabeled, positioned by convention |
+| Scoring (why N points) | No (the total is) | the cards themselves | explain-always breakdown | total only, tap to explain |
+
+The pattern: **necessary + not-deducible → always show; necessary + deducible →
+show for beginners, allow inference for advanced; not-necessary → default off,
+offer as a teaching toggle.** This turns "how obvious should X be" from taste into
+a rule, and it's exactly what distinguishes a *Coached* preset from a *Minimal*
+one — same information model, different obviousness thresholds.
+
+## Owner-added dimensions (2026-07-10)
+
+New dimensions/options from the owner's design pass, beyond the draft and the
+independent review:
+
+- **`hints` (assist / tips display)** — *predictive* guidance surfaced during a
+  decision, distinct from the post-hoc show breakdown. Options:
+  `none` (today, official play — see the analysis-out-of-live-play rule) |
+  `on-select-preview` — as you *tentatively* pick a card/discard, show its
+  consequence (the pegging points it would score, or the resulting hand/crib EV
+  for a discard) before you commit | `post-action` — reveal what a play/discard
+  scored or gave up *after* it happens | `full-coach` — ongoing recommended move.
+  *Depends on:* `confirm-move` (a select-then-confirm model is what makes an
+  on-select preview possible — you need a "selected but not played" state to
+  preview into). *Gated by:* assist-mode rules (never in rated games; backlog
+  AM1–AM3). This is the display-timing side of assist mode.
+
+- **`scoring.breakdown` (verbosity of a score explanation)** — how a score is
+  *decomposed* when shown, orthogonal to `show.detail`/`show.explain-trigger`
+  (which decide *whether/when* to explain). Options: `verbose` — enumerate every
+  atom ("fifteen 2, fifteen 4, pair 6, run 9…") | `shorthand` — bundle combos
+  ("double run of 3 for 8") | `expandable` — shorthand that a beginner can tap to
+  expand into its atoms. Teaching value lives in `verbose`/`expandable`; experts
+  prefer `shorthand`. (Ties to the deferred hand-scorer verbose-run-breakdown
+  work — this is its display dimension.)
+
+- **`interaction.commit` (clarifying `confirm-move`)** — the owner frames this as
+  a first-class choice for BOTH play and discard: `single-click` — one tap plays
+  the card / throws the selected discards immediately (fast, fat-finger risk) |
+  `select-then-confirm` — tap to select (a reversible "armed" state), then a
+  Confirm button commits. The `select-then-confirm` state is the natural host for
+  an `on-select` hint preview (above) and for undo. (This restates the review's
+  `confirm-move` dimension with the owner's explicit play-and-discard framing and
+  the select-preview linkage; keep one id.)
+
+---
+
 ## A. Messages & narration
 
 The running cribbage "voice": "fifteen for 2", "his heels for 2", "go", show
