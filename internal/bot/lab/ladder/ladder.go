@@ -356,3 +356,37 @@ func ThresholdUpsideRung(T int) Discarder {
 		},
 	}
 }
+
+// OppCribScore is the point-EV score of a split under the OPPONENT-MODELED crib:
+// exact expected hand value plus the signed opponent-weighted crib EV
+// (eval.OppCribEV) instead of L3's uniform-opponent crib. sign is +1 for our
+// crib (dealer), −1 for the opponent's.
+func OppCribScore(s Split, dealer bool) float64 {
+	sign := -1.0
+	if dealer {
+		sign = 1.0
+	}
+	return s.EHand + sign*eval.OppCribEV(s.Discard[0], s.Discard[1], dealer)
+}
+
+// OppCribRung is L3 with the uniform crib table swapped for the opponent-modeled
+// one — the only change from L3-pointEV. Comparing the two (agreement, and a
+// discard-isolated head-to-head) answers whether the standard uniform-opponent
+// crib assumption leaves points on the table. Off-ladder (it forks L3, not L4).
+// The first call triggers eval.OppCribEV's one-time table build.
+func OppCribRung() Discarder {
+	return Discarder{
+		Name: "L3-oppcrib",
+		Discard: func(h [6]cribbage.Card, dealer bool, _, _ int) [2]cribbage.Card {
+			sp := Splits(h, dealer)
+			best := 0
+			bestV := OppCribScore(sp[0], dealer)
+			for i := 1; i < len(sp); i++ {
+				if v := OppCribScore(sp[i], dealer); v > bestV {
+					best, bestV = i, v
+				}
+			}
+			return sp[best].Discard
+		},
+	}
+}
