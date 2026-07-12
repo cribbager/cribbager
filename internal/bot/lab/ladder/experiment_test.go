@@ -410,6 +410,87 @@ func TestLadderDesperate(t *testing.T) {
 	t.Log(b.String())
 }
 
+// TestLadderOppCrib is Experiment 3: does modeling the opponent's discards
+// (weighting their crib cards by the role-aware keep model) change the discard,
+// and does it WIN over the uniform-crib evaluator (L3)? Two parts: an agreement
+// / crib-bias tally split by whose crib it is, and a discard-isolated
+// head-to-head. Opt-in (LADDER=oppcrib).
+func TestLadderOppCrib(t *testing.T) {
+	if !ladderEnabled("oppcrib") {
+		t.Skip("set LADDER=oppcrib (or LADDER=all) to run Experiment 3")
+	}
+	n := envInt("N", 100000)
+	pairsN := envInt("PAIRS", 5000)
+	seed := envInt64("SEED", 1)
+	full := cribbage.Deck()
+
+	// --- Part A: agreement & crib bias, split by whose crib. ---
+	rng := rand.New(rand.NewSource(seed))
+	// per role: [0]=their crib (pone), [1]=our crib (dealer)
+	var decisions, agree [2]int
+	var cribBiasSum, scoreGapSum [2]float64 // Σ(oppCrib−uniformCrib) on chosen; Σ point-EV Score conceded on disagreement
+	var disN [2]int
+	for i := 0; i < n; i++ {
+		deck := append([]cribbage.Card(nil), full...)
+		h := deal6(deck, rng)
+		for _, dealer := range []bool{false, true} {
+			r := 0
+			if dealer {
+				r = 1
+			}
+			sp := Splits(h, dealer)
+			uni := pickMaxScore(sp)                       // L3 uniform crib
+			opp := OppCribRung().Discard(h, dealer, 0, 0) // opponent-modeled crib
+			decisions[r]++
+			// crib bias on the UNIFORM pick: how much lower/higher the modeled crib
+			// values that same discard vs the uniform table (unsigned crib values).
+			us := findSplit(sp, uni)
+			cribBiasSum[r] += eval.OppCribEV(us.Discard[0], us.Discard[1], dealer) - eval.CribEV(us.Discard[0], us.Discard[1])
+			if uni == opp {
+				agree[r]++
+			} else {
+				disN[r]++
+				// point-EV Score (uniform objective) the opp-crib pick concedes.
+				scoreGapSum[r] += findSplit(sp, uni).Score - findSplit(sp, opp).Score
+			}
+		}
+	}
+
+	pct := func(a, b int) float64 {
+		if b == 0 {
+			return 0
+		}
+		return 100 * float64(a) / float64(b)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n=== Experiment 3: opponent-modeled crib vs uniform crib (L3) ===\n")
+	fmt.Fprintf(&b, "hands=%d × 2 roles  seed=%d\n\n", n, seed)
+	fmt.Fprintf(&b, "%-14s  %10s  %10s  %14s  %16s\n", "whose crib", "decisions", "agree%", "crib bias (pts)", "Score conceded/dis")
+	fmt.Fprintf(&b, "%s\n", strings.Repeat("-", 70))
+	labels := [2]string{"their crib", "our crib"}
+	for r := 0; r < 2; r++ {
+		bias := cribBiasSum[r] / float64(decisions[r])
+		gap := 0.0
+		if disN[r] > 0 {
+			gap = scoreGapSum[r] / float64(disN[r])
+		}
+		fmt.Fprintf(&b, "%-14s  %10d  %9.2f%%  %+14.4f  %+16.4f\n", labels[r], decisions[r], pct(agree[r], decisions[r]), bias, gap)
+	}
+	fmt.Fprintf(&b, "\n(crib bias = modeled crib EV − uniform crib EV on the discard L3 chose;\n negative means the uniform table is OPTIMISTIC about that crib.)\n")
+
+	// --- Part B: discard-isolated head-to-head — does opp-crib beat uniform? ---
+	uniBot := Bot(Ladder(seed + 1)[L3])
+	oppBot := Bot(OppCribRung())
+	c, err := bot.Compare(oppBot, uniBot, pairsN, seed+2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(&b, "\nhead-to-head (champion pegging both sides, %d duplicate deal-pairs):\n", pairsN)
+	fmt.Fprintf(&b, "  L3-oppcrib vs L3-uniform : %+0.3f pts/pair  95%% CI [%+0.3f, %+0.3f]   windiff %+0.4f\n",
+		c.Margin, c.MarginCILo, c.MarginCIHi, c.WinDiff)
+	t.Log(b.String())
+}
+
 // findSplit returns the split whose discard is the given (unordered) pair.
 func findSplit(sp []Split, d [2]cribbage.Card) Split {
 	for _, s := range sp {
