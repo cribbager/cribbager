@@ -62,6 +62,7 @@ go run ./cmd/cribbager peg   5H 5S 5C        # score a pegging count-sequence
 ```bash
 go test ./...                                    # engine, scorers, bots, server
 go test ./internal/scoring/... -run Exhaustive   # exhaustive scoring proof (slower)
+go run ./cmd/vectors                             # regenerate testdata/vectors (shared rules vectors; see its README)
 npm --prefix web test                            # web client unit tests
 
 # Full-game UI smoke tests (headless Chrome; need a running server + puppeteer-core):
