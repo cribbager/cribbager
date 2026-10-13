@@ -3,6 +3,7 @@ package server
 import (
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -64,17 +65,27 @@ func (r *rateLimiter) sweep() {
 	}
 }
 
-// clientIP is the originating client address for rate-limiting. It trusts only
-// Fly-Client-IP, which the fly proxy sets and overwrites (a client can't forge it
-// end-to-end), then falls back to RemoteAddr. It deliberately does NOT honor
-// X-Forwarded-For: that header is client-supplied and unauthenticated, so trusting
-// it would let anyone present a fresh value per request and bypass every limiter.
+// clientIP is the originating client address for rate-limiting.
+//
+// In production the app listens on loopback only and is reached through a
+// Cloudflare Tunnel, so every connection's peer is cloudflared on 127.0.0.1 and
+// the real client is in CF-Connecting-IP, which Cloudflare always sets. That
+// header is honored ONLY when the peer is loopback: a client that reached the app
+// any other way could set it to anything, and trusting it would let them present a
+// fresh value per request and bypass every limiter.
+//
+// Fly-Client-IP is deliberately not honored: it was only unforgeable behind fly's
+// proxy, whereas Cloudflare forwards unknown request headers untouched. Nor is
+// X-Forwarded-For, which is client-supplied and unauthenticated.
 func clientIP(r *http.Request) string {
-	if v := r.Header.Get("Fly-Client-IP"); v != "" {
-		return v
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
 	}
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if v := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); net.ParseIP(v) != nil {
+			return v
+		}
 	}
-	return r.RemoteAddr
+	return host
 }
