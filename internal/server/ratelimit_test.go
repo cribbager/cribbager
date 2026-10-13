@@ -8,21 +8,49 @@ import (
 )
 
 func TestClientIP(t *testing.T) {
-	// Fly-Client-IP (set by the trusted proxy) wins over everything.
-	r := httptest.NewRequest("POST", "/", nil)
-	r.Header.Set("Fly-Client-IP", "1.2.3.4")
-	r.Header.Set("X-Forwarded-For", "9.9.9.9")
-	r.RemoteAddr = "10.0.0.1:5555"
-	if got := clientIP(r); got != "1.2.3.4" {
-		t.Errorf("with Fly-Client-IP: got %q, want 1.2.3.4", got)
+	req := func(remote string, headers map[string]string) *http.Request {
+		r := httptest.NewRequest("POST", "/", nil)
+		r.RemoteAddr = remote
+		for k, v := range headers {
+			r.Header.Set(k, v)
+		}
+		return r
 	}
-	// Without it, client-supplied X-Forwarded-For must be IGNORED (anti-spoof) and
-	// we fall back to RemoteAddr's host.
-	r2 := httptest.NewRequest("POST", "/", nil)
-	r2.Header.Set("X-Forwarded-For", "9.9.9.9")
-	r2.RemoteAddr = "10.0.0.1:5555"
-	if got := clientIP(r2); got != "10.0.0.1" {
-		t.Errorf("X-Forwarded-For must not be trusted: got %q, want 10.0.0.1", got)
+	cases := []struct {
+		name    string
+		remote  string
+		headers map[string]string
+		want    string
+	}{
+		{"tunnel (loopback) trusts CF-Connecting-IP",
+			"127.0.0.1:5555", map[string]string{"CF-Connecting-IP": "203.0.113.7"}, "203.0.113.7"},
+		{"tunnel over IPv6 loopback trusts CF-Connecting-IP",
+			"[::1]:5555", map[string]string{"CF-Connecting-IP": "2001:db8::1"}, "2001:db8::1"},
+		{"loopback without the header falls back to the peer",
+			"127.0.0.1:5555", nil, "127.0.0.1"},
+		{"loopback with a malformed header falls back to the peer",
+			"127.0.0.1:5555", map[string]string{"CF-Connecting-IP": "not-an-ip"}, "127.0.0.1"},
+		// A client that reaches the app directly (not via the tunnel) can set any
+		// header it likes, so CF-Connecting-IP is ignored unless the peer is loopback.
+		{"non-loopback peer cannot forge CF-Connecting-IP",
+			"10.0.0.1:5555", map[string]string{"CF-Connecting-IP": "203.0.113.7"}, "10.0.0.1"},
+		// Fly-Client-IP was only safe behind fly's proxy. Cloudflare passes unknown
+		// headers through, so it is now client-controlled and must be ignored.
+		{"Fly-Client-IP is ignored even from loopback",
+			"127.0.0.1:5555", map[string]string{"Fly-Client-IP": "1.2.3.4"}, "127.0.0.1"},
+		{"Fly-Client-IP is ignored from other peers",
+			"10.0.0.1:5555", map[string]string{"Fly-Client-IP": "1.2.3.4"}, "10.0.0.1"},
+		// X-Forwarded-For is client-supplied and unauthenticated; never trusted.
+		{"X-Forwarded-For is ignored",
+			"127.0.0.1:5555", map[string]string{"X-Forwarded-For": "9.9.9.9"}, "127.0.0.1"},
+		{"X-Forwarded-For is ignored alongside CF-Connecting-IP",
+			"127.0.0.1:5555", map[string]string{"X-Forwarded-For": "9.9.9.9", "CF-Connecting-IP": "203.0.113.7"}, "203.0.113.7"},
+		{"peer without a port still resolves", "10.0.0.1", nil, "10.0.0.1"},
+	}
+	for _, c := range cases {
+		if got := clientIP(req(c.remote, c.headers)); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
 	}
 }
 
