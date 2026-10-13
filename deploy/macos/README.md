@@ -63,15 +63,20 @@ cribbager.org is already on Cloudflare DNS.
 
 ### 2. Resend (password-reset email)
 
-1. Create an account at https://resend.com.
-2. **Domains > Add Domain**: `cribbager.org` (a sending subdomain such as `mail.cribbager.org`
-   also works and isolates reputation). Choose the nearest region.
-3. Resend shows DNS records (SPF `TXT`, DKIM `TXT`/`CNAME`s, and an MX for the `send`
-   subdomain). Add each exactly as shown in **Cloudflare DNS**, with the proxy status set to
-   **DNS only** (grey cloud). Click **Verify** in Resend; it can take minutes to an hour.
-4. **API Keys > Create API Key**, permission "Sending access", restricted to that domain.
-   Copy the `re_...` key now (shown once). It goes in the env file as `SMTP_PASS` below.
-5. Pick `SMTP_FROM` on the verified domain, e.g. `Cribbager <noreply@cribbager.org>`.
+The `cribbager.org` domain was set up in Resend for the earlier fly.io deployment: the DKIM
+(`resend._domainkey`) and the `send` subdomain MX and SPF records already exist in Cloudflare
+DNS. So only check, then create a key.
+
+1. Sign in at https://resend.com and open **Domains**. Confirm `cribbager.org` shows
+   **Verified**. If it doesn't, or the account is new, choose **Add Domain** (`cribbager.org`,
+   or a sending subdomain such as `mail.cribbager.org`), add the SPF `TXT`, DKIM and MX
+   records Resend shows to **Cloudflare DNS** with the proxy status **DNS only** (grey
+   cloud), and click **Verify**; it can take minutes to an hour.
+2. **API Keys > Create API Key**, permission "Sending access", restricted to that domain.
+   Resend never shows an existing key again, so create a new one (the old fly key is gone
+   with the fly app; delete it in Resend if you find it listed). Copy the `re_...` key now
+   (shown once). It goes in the env file as `SMTP_PASS` below.
+3. Pick `SMTP_FROM` on the verified domain, e.g. `Cribbager <noreply@cribbager.org>`.
 
 Limits: Resend's free tier has been 3,000 emails/month and 100/day, and sending **pauses at
 the limit rather than billing you**. Plans change; **confirm the current limits (including
