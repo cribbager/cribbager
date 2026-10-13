@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.cribbager.app</string>
+	<key>UserName</key>
+	<string>@SVC_USER@</string>
+	<key>GroupName</key>
+	<string>@SVC_USER@</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>@LIBEXEC@/run-app.sh</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CRIBBAGER_PREFIX</key>
+		<string>@PREFIX@</string>
+		<key>CRIBBAGER_ENV</key>
+		<string>@ENV_FILE@</string>
+		<key>CRIBBAGER_BREW</key>
+		<string>@BREW@</string>
+		<key>HOME</key>
+		<string>@PREFIX@/home</string>
+		<key>PATH</key>
+		<string>@BREW@/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>@PREFIX@</string>
+	<key>StandardOutPath</key>
+	<string>@LOGDIR@/app.log</string>
+	<key>StandardErrorPath</key>
+	<string>@LOGDIR@/app.log</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ExitTimeOut</key>
+	<integer>20</integer>
+</dict>
+</plist>

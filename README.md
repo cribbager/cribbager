@@ -15,8 +15,8 @@ the server serves directly.
   refresh, opponent-left notices, and rematch.
 - Optional **accounts** (username/password, password reset by email) with per-player
   **game history + stats**.
-- **Durable Postgres persistence**, deployed on fly.io with **CI auto-deploy** on every
-  merge to `main`.
+- **Durable Postgres persistence**, self-hosted on a Mac Studio (launchd + Cloudflare
+  Tunnel) with **pull-based auto-deploy** of every merge to `main`.
 
 ## Quick start
 
@@ -34,7 +34,7 @@ step — edit anything under `web/public/src/` and just refresh.
 
 - **[Development](docs/development.md)** — running locally, the test suite, the CLI,
   linting, and improving the bot.
-- **[Deployment](docs/deployment.md)** — fly.io deploy + CI/CD, Postgres persistence &
+- **[Deployment](docs/deployment.md)** — self-hosted deploy (`deploy/macos/`), Postgres persistence &
   backups, password-reset email, and the full configuration reference.
 
 ## Layout
