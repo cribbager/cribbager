@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"log"
+	"net/mail"
 	"net/smtp"
 	"strings"
 	"time"
@@ -35,13 +36,24 @@ type SMTPEmailer struct {
 	port string // SMTP server port
 	user string // username for PLAIN auth ("" → no auth)
 	pass string // password for PLAIN auth
-	from string // envelope + From-header sender address
+	from string // From-header sender, may carry a display name
+	// envelope is the bare address for SMTP's MAIL FROM, which takes no display
+	// name. Derived from `from`; falls back to it verbatim if it does not parse.
+	envelope string
 }
 
 // NewSMTPEmailer builds an SMTPEmailer from explicit config. host and from are
 // required by the caller; user may be empty to send without authentication.
+//
+// from may carry a display name ("Cribbager <noreply@example.org>"), which is
+// what belongs in the From: header — but SMTP's MAIL FROM wants the bare address,
+// and strict servers reject the display form with 501. Split the two here.
 func NewSMTPEmailer(host, port, user, pass, from string) *SMTPEmailer {
-	return &SMTPEmailer{host: host, port: port, user: user, pass: pass, from: from}
+	e := &SMTPEmailer{host: host, port: port, user: user, pass: pass, from: from, envelope: from}
+	if addr, err := mail.ParseAddress(from); err == nil {
+		e.envelope = addr.Address
+	}
+	return e
 }
 
 func (e *SMTPEmailer) Send(to, subject, body string) error {
@@ -51,7 +63,7 @@ func (e *SMTPEmailer) Send(to, subject, body string) error {
 	}
 	msg := buildMessage(e.from, to, subject, body)
 	addr := e.host + ":" + e.port
-	return smtp.SendMail(addr, auth, e.from, []string{to}, msg)
+	return smtp.SendMail(addr, auth, e.envelope, []string{to}, msg)
 }
 
 // buildMessage assembles a minimal RFC-5322 message: From/To/Subject/Date
