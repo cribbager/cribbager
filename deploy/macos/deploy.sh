@@ -11,6 +11,10 @@
 # Only ever fast-forwards: the fetch refuses a non-fast-forward main, and a new
 # commit must descend from the release that is running. Nothing is pushed anywhere.
 #
+# A commit that changes nothing the running app serves (docs, deploy/, CI, README, test
+# files) is recorded as seen but NOT built or restarted; see touches_app. `current` may
+# therefore sit behind main until the next commit that does change the app.
+#
 # Everything below is overridable from the environment so the logic can be tested in a
 # scratch prefix (see deploy/macos/test/test-deploy.sh).
 set -euo pipefail
@@ -189,6 +193,16 @@ activate() { # activate <sha> : flip, restart, verify. returns 0 healthy.
   wait_ready
 }
 
+# Does the diff old..new change what the running app does? The server and its packages,
+# the web client it serves, and the module files count; test files and testdata do not.
+# Anything else (docs, deploy/, .github/, README) moves main without a rebuild. If git
+# cannot tell (a missing object, say) assume yes: a needless build beats a missed one.
+touches_app() { # touches_app <old> <new> : succeeds if the app must be rebuilt
+  gitx diff --quiet "$1" "$2" -- cmd internal web/public go.mod go.sum \
+    ':(exclude,glob)**/*_test.go' ':(exclude,glob)**/testdata/**' && return 1
+  return 0
+}
+
 # --- commands -------------------------------------------------------------------
 cmd_deploy() {
   [ -f "$STATE/hold" ] && return 0 # manual rollback in effect; `resume` lifts it
@@ -207,6 +221,7 @@ cmd_deploy() {
 
   [ "$new" = "$deployed" ] && return 0
   [ "$new" = "$(read_state failed)" ] && return 0 # already tried and failed; wait for a newer commit
+  [ "$new" = "$(read_state skipped)" ] && return 0 # already judged not to touch the app
 
   if [ -n "$deployed" ]; then
     if ! gitx cat-file -e "$deployed^{commit}" 2>/dev/null ||
@@ -214,6 +229,12 @@ cmd_deploy() {
       loud "refusing: $new does not descend from running release $deployed (history rewritten?)"
       return 1
     fi
+  fi
+
+  if [ -n "$deployed" ] && ! touches_app "$deployed" "$new"; then
+    printf '%s\n' "$new" >"$STATE/skipped"
+    log "origin/$BRANCH moved ${deployed:0:12} -> ${new:0:12}: only docs/CI/deploy files changed; app not rebuilt or restarted"
+    return 0
   fi
 
   log "origin/$BRANCH moved: ${deployed:-none} -> $new"
@@ -225,7 +246,7 @@ cmd_deploy() {
 
   [ -n "$deployed" ] && printf '%s\n' "$deployed" >"$STATE/previous"
   if activate "$new"; then
-    rm -f "$STATE/failed"
+    rm -f "$STATE/failed" "$STATE/skipped"
     log "deployed $new"
     prune_releases
     return 0
@@ -272,6 +293,7 @@ cmd_status() {
   echo "current:  $(current_rev)"
   echo "previous: $(read_state previous)"
   echo "failed:   $(read_state failed)"
+  echo "skipped:  $(read_state skipped)   (newest main commit that did not touch the app)"
   echo "hold:     $(read_state hold)"
   echo "main:     $(gitx rev-parse --verify "refs/heads/$BRANCH" 2>/dev/null || true)"
   echo "releases:"

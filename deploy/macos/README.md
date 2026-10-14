@@ -36,36 +36,49 @@ start at boot with nobody logged in.
 
 ## Setup, in order
 
-### 1. Cloudflare dashboard (Zero Trust)
+### 1. Cloudflare dashboard (tunnel)
 
-cribbager.org is already on Cloudflare DNS.
+cribbager.org is already on Cloudflare DNS. You do **not** need Zero Trust (its "Get
+Started" onboarding) for this: tunnels live under the main dashboard's **Networking** menu.
+Zero Trust is only needed for the optional Access login policy in step 5. The dashboard
+layout changes now and then; if a label differs, look for the same thing nearby.
 
-1. Cloudflare dashboard, **Zero Trust** (if prompted, pick the Free plan) then
-   **Networks > Tunnels > Create a tunnel**. Connector type **Cloudflared**, name it
-   `cribbager-studio`.
+1. Cloudflare dashboard, **Networking > Tunnels > Create a tunnel**. Connector type
+   **Cloudflared**, name it `cribbager-studio`.
 2. On the "install connector" screen choose **macOS** and copy the **token** only: the long
-   `eyJ...` string after `cloudflared service install`. **Do not run** that command; our
-   launchd job runs cloudflared instead. Keep the token private (it lets anyone run your
-   tunnel).
-3. **Public hostname** tab: add hostname `cribbager.org` (subdomain empty), **Service type
-   HTTP**, **URL `127.0.0.1:8080`** (that is `http://127.0.0.1:8080`). Save.
-4. If DNS already has an `A`/`AAAA`/`CNAME` for `cribbager.org` pointing at fly.io, delete
-   it first (DNS tab); the tunnel setup then creates the proxied CNAME for you. Also remove
-   `www` or other records if you no longer use them.
+   `eyJ...` string after `cloudflared service install` (a Docker tab shows the same string
+   after `--token`). **Do not run** that command; our launchd job runs cloudflared instead.
+   Keep the token private (it lets anyone run your tunnel). It goes in the Studio's env
+   file as `TUNNEL_TOKEN`; never in git, chat or a PR.
+3. Open the tunnel's **Routes** tab > **Add route > Published application**: leave the
+   subdomain empty, choose the domain `cribbager.org`, and set the service URL to
+   `http://127.0.0.1:8080`. Save. (Older dashboards call this the **Public hostname** tab.)
+4. Saving creates a proxied (orange cloud) CNAME for `cribbager.org` pointing at
+   `<tunnel-id>.cfargotunnel.com`; check the DNS tab. If the apex already has an
+   `A`/`AAAA`/`CNAME` pointing at fly.io, delete **only those** first, or the route cannot
+   create its record. **Keep every other record**, especially Resend's email records
+   (`resend._domainkey`, and the `MX` and SPF `TXT` on `send`) and `MX`/`TXT` records for
+   mail. Deleting them breaks email, and only email. Optionally add a second route for
+   `www.cribbager.org` to the same service if you want `www` to work.
 5. `/metrics` and `/stats` exposure: they are gated by `STATS_TOKEN` (bearer token), which
-   install.sh generates. That is sufficient on its own. Optional extra layer: **Zero Trust >
-   Access > Applications > Add > Self-hosted**, domain `cribbager.org`, paths `/metrics` and
-   `/stats`, policy allowing only your email. (If you later scrape from a machine that
-   cannot do the Access login, use a service token or just rely on `STATS_TOKEN`.)
+   install.sh generates. That is sufficient on its own. Optional extra layer: Zero Trust >
+   Access > Applications > Add > Self-hosted, domain `cribbager.org`, paths `/metrics` and
+   `/stats`, policy allowing only your email (this needs the Zero Trust onboarding; skip it
+   if it asks for a plan or card you do not want). If you later scrape from a machine that
+   cannot do the Access login, use a service token or just rely on `STATS_TOKEN`.
 6. Leave Cloudflare's SSL mode at its default; the hop from cloudflared to the app is local
    plain HTTP by design. Cloudflare proxies SSE fine; the app sends `: ping` every 25s, well
    under Cloudflare's 100s idle limit.
+7. Until cloudflared runs on the Studio the site shows a Cloudflare error (e.g. 1033, tunnel
+   not connected). That is expected; the tunnel shows **Healthy** once the install is done.
 
 ### 2. Resend (password-reset email)
 
-The `cribbager.org` domain was set up in Resend for the earlier fly.io deployment: the DKIM
-(`resend._domainkey`) and the `send` subdomain MX and SPF records already exist in Cloudflare
-DNS. So only check, then create a key.
+The `cribbager.org` domain was set up in Resend for the earlier fly.io deployment, with DKIM
+(`resend._domainkey`) and `send`-subdomain MX and SPF records in Cloudflare DNS. Check they
+are still there (`dig +short TXT resend._domainkey.cribbager.org`); if a DNS cleanup removed
+them, re-add the records Resend lists (copy the values from the Resend dashboard; they are
+not reproducible from here) with the proxy set to **DNS only**, and click **Verify**.
 
 1. Sign in at https://resend.com and open **Domains**. Confirm `cribbager.org` shows
    **Verified**. If it doesn't, or the account is new, choose **Add Domain** (`cribbager.org`,
@@ -147,8 +160,14 @@ first time): `tail -f /var/log/cribbager/deployer.log`.
       updates and security responses/system files). Reboots are fine: everything restarts.
 - [ ] **Remote Login (SSH) off** unless you need it; if you do, key-only, your admin user
       only. `sudo systemsetup -setremotelogin off`. Screen Sharing off unless needed.
-- [ ] **Never sleep**: `sudo pmset -a sleep 0 disablesleep 1 displaysleep 10`; check with `pmset -g`.
-- [ ] **Restart after power failure**: `sudo pmset -a autorestart 1`.
+- [ ] **Never sleep the system** (the display may sleep): when the Mac sleeps, the app,
+      Postgres and cloudflared all stop and the site is down. Run
+      `sudo pmset -a sleep 0 disksleep 0 displaysleep 15 womp 1 autorestart 1` and check
+      `pmset -g` (`sleep 0`, `autorestart 1`, `womp 1`). The equivalent System Settings >
+      Energy toggles are **Prevent automatic sleeping when the display is off**, **Wake for
+      network access** and **Start up automatically after a power failure**.
+- [ ] **Do not let macOS restart by itself unattended.** With FileVault on a reboot stalls
+      at the unlock screen; set updates to download and notify, and pick your own reboot time.
 - [ ] `_cribbager` is not an admin and has no GUI login (`id _cribbager`; it must not list
       `admin`). Keep your own admin account protected with a strong password and Touch ID.
 - [ ] Keep Homebrew updated (`brew update && brew upgrade`, restart services after
@@ -218,6 +237,14 @@ new `current`; games reload from Postgres, SSE clients reconnect), and polls `/r
 (30 tries, 2s apart). On failure it points `current` back, restarts, logs `!!!` lines, and
 **will not retry that commit**; the next commit on `main` is tried normally. A lock
 prevents overlapping runs. It only fast-forwards: a rewritten `main` is refused and logged.
+
+A commit that changes nothing the running app serves is **not** built or restarted: the
+app is rebuilt only when `cmd/`, `internal/` (excluding `*_test.go` and `testdata/`),
+`web/public/`, `go.mod` or `go.sum` differ from the running release. Docs, `README`,
+`deploy/`, `.github/` and test-only commits are logged as skipped ("only docs/CI/deploy
+files changed") and recorded in `state/skipped`, so `current` can sit behind `main` until the
+next app change, which then deploys the tip including the skipped commits. `deploy.sh
+status` shows the `skipped:` commit. When in doubt (git cannot compare), it builds.
 CI status is not consulted: protect `main` on GitHub (required checks) so only green
 commits can land.
 
@@ -234,6 +261,28 @@ tail -f /var/log/cribbager/deployer.log
 
 (`sudo -u _cribbager` works although the account has no shell: sudo runs the command
 directly.)
+
+### Developing on the Studio
+
+Production never reads your working directories, so developing on the same Mac is safe. The
+deployer uses its own bare repo cache (`/usr/local/cribbager/repo`) and builds into
+`/usr/local/cribbager/releases/`; the scripts launchd runs are copies in
+`/usr/local/libexec/cribbager`. Keep your clone under your own home directory, never under
+`/usr/local/cribbager`. The places a dev setup can still interfere:
+
+- **Port 8080.** Production binds `127.0.0.1:8080`; a dev server on the default `:8080`
+  collides with it. Run dev on another port: `ADDR=127.0.0.1:8081 go run ./cmd/cribbager-server`.
+- **Re-running `install.sh`** installs the scripts from the checkout it is run in, so
+  uncommitted edits to `deploy/macos/` would go live. Run it only from a clean, up-to-date
+  `main`.
+- **Database.** The dev `docker compose` Postgres (port 5432) does not clash: production
+  Postgres uses a unix socket only. Never point a dev `DATABASE_URL` at the production
+  database; use a separate one (or none: the server runs in-memory without it).
+- **CPU and memory.** Builds and `go test` (the exhaustive scoring proofs especially)
+  compete with production for the machine; fine for a prototype, but expect the occasional
+  slow response while a big test run is going.
+- **Merging is deploying.** Whatever lands on `main` and affects the app is built and
+  restarted within about a minute.
 
 ### Roll back
 
@@ -275,7 +324,7 @@ Edit `/usr/local/etc/cribbager/env`, then:
 - **Resend key** (`SMTP_PASS`): create a new key in Resend, edit, restart the app, delete the old key.
 - **Database password**: put a new alphanumeric password in `DATABASE_URL` (`openssl rand -hex 24`),
   then `sudo deploy/macos/install.sh` (it runs `ALTER ROLE`) and restart the app.
-- **Tunnel token**: in Cloudflare Zero Trust > Tunnels > your tunnel > **Refresh token**
+- **Tunnel token**: in Cloudflare Networking > Tunnels > your tunnel > **Refresh token** (or delete and recreate the tunnel)
   (or recreate), edit `TUNNEL_TOKEN`, then `sudo launchctl kickstart -k system/org.cribbager.cloudflared`.
 - **Backup key**: generate a new age keypair (step 3), replace `AGE_RECIPIENT`; **keep the
   old private key** to read older backups.

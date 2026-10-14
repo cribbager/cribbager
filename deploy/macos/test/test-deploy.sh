@@ -21,8 +21,18 @@ check() { # check <desc> <cmd...>
 eq() { [ "$1" = "$2" ]; }
 
 G() { git -c user.name=test -c user.email=test@example.invalid -C "$T/origin" "$@"; }
-commit() { # commit <file-content-tag>  -> new commit on origin main
-  echo "$1" >"$T/origin/MARK"; G add MARK >/dev/null; G commit -qm "$1"; G rev-parse HEAD
+commit() { # commit <file-content-tag>  -> new commit on origin main that changes the app
+  echo "$1" >"$T/origin/web/public/MARK"; G add web/public/MARK >/dev/null; G commit -qm "$1"; G rev-parse HEAD
+}
+commit_docs() { # a commit that touches only docs
+  echo "$1" >"$T/origin/docs/MARK.md"; G add docs/MARK.md >/dev/null; G commit -qm "$1"; G rev-parse HEAD
+}
+commit_testfile() { # a commit that touches only a Go test file inside internal/
+  echo "// $1" >>"$T/origin/internal/server/ratelimit_test.go"; G add internal/server/ratelimit_test.go >/dev/null; G commit -qm "$1"; G rev-parse HEAD
+}
+commit_deploy() { # a commit that touches only deploy/ and CI
+  echo "# $1" >>"$T/origin/deploy/macos/README.md"; echo "# $1" >>"$T/origin/.github/workflows/ci.yml"
+  G add deploy/macos/README.md .github/workflows/ci.yml >/dev/null; G commit -qm "$1"; G rev-parse HEAD
 }
 
 # throwaway origin: a clone of this repo's main
@@ -113,6 +123,35 @@ count=$(ls -1 "$P/releases" | grep -cE '^[0-9a-f]{40}$')
 check "at most KEEP(+previous) releases kept ($count)" test "$count" -le 3
 check "current present" test -x "$P/current/cribbager-server"
 unset CRIBBAGER_KEEP_RELEASES
+
+echo "8b. commits that do not touch the app are not built or restarted"
+before=$(cur); n=$(restarts)
+DOCS=$(commit_docs "docs only")
+"$DEPLOY" >"$T/out8b" 2>&1; rc=$?
+check "docs-only: exit 0" eq $rc 0
+check "docs-only: current unchanged" eq "$(cur)" "$before"
+check "docs-only: no restart" eq "$(restarts)" "$n"
+check "docs-only: skip is logged" grep -q 'only docs/CI/deploy files changed' "$T/out8b"
+check "docs-only: skipped recorded" eq "$(st skipped)" "$DOCS"
+"$DEPLOY" >"$T/out8c" 2>&1
+check "docs-only: seen again is a quiet no-op" test ! -s "$T/out8c"
+TF=$(commit_testfile "test file only")
+"$DEPLOY" >"$T/out8d" 2>&1
+check "test-file-only (internal/**/_test.go): not rebuilt" eq "$(cur)" "$before"
+check "test-file-only: no restart" eq "$(restarts)" "$n"
+check "test-file-only: skipped recorded" eq "$(st skipped)" "$TF"
+DP=$(commit_deploy "deploy and ci only")
+"$DEPLOY" >"$T/out8e" 2>&1
+check "deploy/ + .github only: not rebuilt" eq "$(cur)" "$before"
+check "deploy/ + .github only: no restart" eq "$(restarts)" "$n"
+APP=$(commit "app change after skipped commits")
+"$DEPLOY" >"$T/out8f" 2>&1; rc=$?
+check "app commit after skipped ones: exit 0" eq $rc 0
+check "app commit deploys the tip (carries the skipped commits)" eq "$(cur)" "$APP"
+check "app commit restarts exactly once" eq "$(restarts)" "$((n + 1))"
+check "skipped cleared after a real deploy" test ! -e "$P/state/skipped"
+"$DEPLOY" status >"$T/status8" 2>&1
+check "status shows the skipped line" grep -q '^skipped:' "$T/status8"
 
 echo "9. history rewrite is refused (fast-forward only)"
 before=$(cur)
