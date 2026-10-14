@@ -5,6 +5,11 @@
 set -euo pipefail
 PREFIX=${CRIBBAGER_PREFIX:-/usr/local/cribbager}
 BREW=${CRIBBAGER_BREW:-/opt/homebrew}
+# launchd hands daemons no locale. With LC_ALL unset the postmaster's startup locale
+# lookup goes through macOS's CoreFoundation, which spawns a thread, and Postgres
+# aborts: "postmaster became multithreaded during startup". Must stay in step with the
+# locale initdb used (install.sh: en_US.UTF-8).
+export LC_ALL=${LC_ALL:-en_US.UTF-8} LANG=${LANG:-en_US.UTF-8}
 
 "$BREW/opt/postgresql@16/bin/postgres" -D "$PREFIX/pgdata" \
   -c listen_addresses= \
