@@ -5,7 +5,7 @@ over a shared link. A Go server runs the game, the bot, and the human-vs-human
 session; the browser client is plain JavaScript (ES modules, **no build step**) that
 the server serves directly.
 
-**Live at https://cribbager.org.**
+The official instance runs at https://cribbager.org.
 
 ## What's inside
 
@@ -15,8 +15,8 @@ the server serves directly.
   refresh, opponent-left notices, and rematch.
 - Optional **accounts** (username/password, password reset by email) with per-player
   **game history + stats**.
-- **Durable Postgres persistence**, self-hosted on a Mac Studio (launchd + Cloudflare
-  Tunnel) with **pull-based auto-deploy** of every merge to `main`.
+- **Durable Postgres persistence**, self-hostable on a Mac you own (launchd +
+  Cloudflare Tunnel, your own domain) with **pull-based auto-deploy** of every merge to `main`.
 
 ## Quick start
 
@@ -34,8 +34,10 @@ step — edit anything under `web/public/src/` and just refresh.
 
 - **[Development](docs/development.md)** — running locally, the test suite, the CLI,
   linting, and improving the bot.
-- **[Deployment](docs/deployment.md)** — self-hosted deploy (`deploy/macos/`), Postgres persistence &
-  backups, password-reset email, and the full configuration reference.
+- **[Self-hosting](deploy/macos/README.md)** — set up your own server on a Mac with your own
+  domain.
+- **[Deployment](docs/deployment.md)** — Postgres persistence, password-reset email, and the
+  full configuration reference.
 
 ## Layout
 
