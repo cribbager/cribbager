@@ -3,16 +3,16 @@
 Operating Cribbager in production. For running it locally, see
 [Development](development.md).
 
-Live at **https://cribbager.org**, self-hosted on an always-on Mac Studio under launchd
-and published through a Cloudflare Tunnel. **fly.io is retired**; `fly.toml` and the
-`Dockerfile` remain only for reference and local container use.
+The official instance runs at https://cribbager.org. To host your own, with your own
+domain, follow **[`deploy/macos/README.md`](../deploy/macos/README.md)**; this page covers
+how the app behaves in production, whoever hosts it.
 
 ## Deploying
 
-Setup, continuous (pull-based) deployment, manual deploys, rollback, logs, secrets,
-backups and uninstall are all in **[`deploy/macos/README.md`](../deploy/macos/README.md)**.
-In short: a launchd job on the Mac fetches `main` every minute, builds, restarts the app,
-checks `/readyz`, and rolls back on failure. CI no longer deploys anything.
+The macOS guide covers setup, continuous deployment, rollback, backups and operation
+(see [`deploy/`](../deploy/README.md) for the options). In short: a launchd job on the Mac
+fetches `main` every minute, builds, restarts the app, checks `/readyz`, and rolls back on
+failure. CI does not deploy anything.
 
 ## Single-machine constraint
 
@@ -29,11 +29,11 @@ launchd app job keeps exactly one process alive, and the deployer restarts it in
 By default games live only in memory. Set `DATABASE_URL` to a Postgres DSN and
 in-progress games, accounts/sessions, and finished-game history are written through to
 Postgres and reloaded at boot, so a deploy or restart doesn't drop them. Postgres is
-portable (local, Neon, Supabase, Docker) — nothing here is provider-specific. Production
-runs a local Postgres 16 on the Mac Studio (provisioned by `deploy/macos/install.sh`).
+portable (local, Neon, Supabase, Docker) — nothing here is provider-specific. The macOS
+setup runs a local Postgres 16 (provisioned by `deploy/macos/install.sh`).
 
 The app just needs `DATABASE_URL` in its environment. No migration step (the schema is
-created on boot). Production's looks like:
+created on boot). The macOS setup uses:
 
 ```
 DATABASE_URL=postgres://cribbager:<password>@/cribbager?host=/usr/local/cribbager/run&sslmode=disable
@@ -54,9 +54,9 @@ Notes:
 ### Backups & durability
 
 Postgres holds the only irreplaceable data — accounts and the permanent finished-game
-history (`results`), which is never reaped. **Backups**: on the Mac Studio a nightly
-age-encrypted `pg_dump` (retention, restore drill and off-machine sync options are in
-`deploy/macos/README.md`); a managed provider (Neon/Supabase) would instead give
+history (`results`), which is never reaped. **Backups**: the macOS setup takes a nightly
+age-encrypted `pg_dump` (retention, restore drill and off-machine copies are in
+[`deploy/macos/docs/backups.md`](../deploy/macos/docs/backups.md)); a managed provider (Neon/Supabase) would instead give
 point-in-time recovery — note its retention as your RPO.
 In-progress games are best-effort (they reload on restart, and a lost DB just drops
 them); accounts and history are what a backup protects. The terminal write of a
@@ -80,10 +80,10 @@ SMTP_PORT=587
 SMTP_USER=resend
 SMTP_PASS=<your Resend API key>
 SMTP_FROM=you@your-verified-domain   # verify the domain's SPF/DKIM in the provider
-BASE_URL=https://cribbager.org       # so the emailed link points at the public site
+BASE_URL=https://example.com         # so the emailed link points at your public site
 ```
 
-Locally, `docker compose` runs **Mailpit** instead (see [Development](development.md)).
+Setup details: [`deploy/macos/docs/email.md`](../deploy/macos/docs/email.md). Locally, `docker compose` runs **Mailpit** instead (see [Development](development.md)).
 
 ## Configuration reference
 
@@ -95,9 +95,9 @@ In production these live in one env file (`/usr/local/etc/cribbager/env`, mode 6
 | `DATABASE_URL` | Postgres DSN. Unset → in-memory only (no persistence). |
 | `SECURE_COOKIES` | Set (e.g. `1`) behind https so session cookies carry the `Secure` flag.  |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Reset-email transport. Unset → links are logged only. |
-| `BASE_URL` | External origin for emailed links, e.g. `https://cribbager.org`. Unset → derived from the request (honoring `X-Forwarded-Proto`). |
+| `BASE_URL` | External origin for emailed links, e.g. `https://example.com`. Unset → derived from the request (honoring `X-Forwarded-Proto`). |
 | `STATS_TOKEN` | If set, gates `GET /stats` **and `GET /metrics`** behind this bearer token. Unset → both are open. |
-| `GOMEMLIMIT` | Soft heap ceiling. Optional soft heap ceiling (unset on the Mac Studio). |
+| `GOMEMLIMIT` | Soft heap ceiling. Optional soft heap ceiling. |
 | `ADDR` / `WEB` | Listen address / static dir (mostly for dev). |
 
 ## Observability
@@ -165,6 +165,6 @@ should be under ~26 hours old.
 
 ## Governance
 
-Production pulls `main` and deploys whatever is there, so **branch protection on `main`
+A self-hosted macOS install pulls `main` and deploys whatever is there, so **branch protection on `main`
 (require the `go` / `web` / `lint` / `smoke` checks) is the deploy gate** — keep it on.
 The deployer itself does not look at CI status.

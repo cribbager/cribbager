@@ -1,6 +1,7 @@
 #!/bin/bash
 # Idempotent installer for the Cribbager launchd deployment. Run on the Mac Studio:
-#   sudo deploy/macos/install.sh          # install / update
+#   sudo DOMAIN=example.com deploy/macos/install.sh   # first install (DOMAIN fills BASE_URL, SMTP_FROM)
+#   sudo deploy/macos/install.sh          # re-run / update (DOMAIN is ignored once the env file exists)
 #        deploy/macos/install.sh --check  # prerequisite check only (no root needed)
 # Safe to re-run: after editing the env file, after pulling new scripts, after upgrades.
 set -euo pipefail
@@ -132,10 +133,15 @@ NS
 ensure_env() {
   if [ ! -f "$ENV_FILE" ]; then
     say "creating $ENV_FILE with generated secrets"
-    local dbpw tok
+    local dbpw tok dom=${DOMAIN:-}
+    if [ -n "$dom" ] && [[ ! $dom =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+      echo "DOMAIN must be a bare hostname such as example.com (got: $dom)" >&2; exit 1
+    fi
+    [ -n "$dom" ] || say "DOMAIN not given: BASE_URL and SMTP_FROM get the placeholder example.com"
     dbpw=$(openssl rand -hex 24)
     tok=$(openssl rand -hex 24)
-    (umask 077; sed -e "s/@GENERATE_DB_PASSWORD@/$dbpw/" -e "s/@GENERATE_STATS_TOKEN@/$tok/" "$HERE/env.example" >"$ENV_FILE")
+    (umask 077; sed -e "s/@GENERATE_DB_PASSWORD@/$dbpw/" -e "s/@GENERATE_STATS_TOKEN@/$tok/" \
+      -e "s/@DOMAIN@/${dom:-example.com}/g" "$HERE/env.example" >"$ENV_FILE")
   fi
   chown "$SVC_USER:wheel" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
@@ -248,7 +254,12 @@ else
   install_plist backup
   todo+=("set AGE_RECIPIENT in $ENV_FILE (age public key), then re-run this installer")
 fi
-is_set "$(env_val SMTP_PASS)" || todo+=("set SMTP_PASS (Resend API key) in $ENV_FILE; password-reset mail only logs until you do, then: sudo launchctl kickstart -k system/org.cribbager.app")
+case "$(env_val BASE_URL)" in *example.com*) todo+=("set BASE_URL and SMTP_FROM to your real domain in $ENV_FILE, then: sudo launchctl kickstart -k system/org.cribbager.app") ;; esac
+if ! is_set "$(env_val SMTP_HOST)"; then
+  todo+=("optional: password-reset email is off (SMTP_HOST unset; reset links are only logged). See deploy/macos/docs/email.md")
+elif ! is_set "$(env_val SMTP_PASS)"; then
+  todo+=("set SMTP_PASS in $ENV_FILE; reset mail only logs until you do, then: sudo launchctl kickstart -k system/org.cribbager.app")
+fi
 
 say "done. The deployer builds the first release within a minute or two: tail -f $LOGDIR/deployer.log"
 if [ ${#todo[@]} -gt 0 ]; then
