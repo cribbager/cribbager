@@ -395,11 +395,6 @@ Trust boundaries, outermost first:
 
 Known gaps worth knowing:
 
-- Rate limiting identifies clients by `RemoteAddr` unless a `Fly-Client-IP` header is
-  present (`internal/server/ratelimit.go`). Behind cloudflared every request arrives from
-  `127.0.0.1`, so **per-IP rate limits currently collapse into one shared bucket for all
-  users**. Fix in code (trust `CF-Connecting-IP`, safe here because the app is only
-  reachable through the tunnel) before relying on those limiters.
 - If FileVault is off the disk is unencrypted at rest; if on, an unattended reboot waits
   for an unlock (see the hardening list).
 - Local backups share fate with the machine until you copy them off.
