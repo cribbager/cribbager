@@ -90,6 +90,22 @@ golangci-lint run ./...
 npm --prefix web run lint
 ```
 
+## iOS app alignment
+
+This repo is the reference implementation for the iOS app
+([cribbager-app](https://github.com/cribbager/cribbager-app)), which ports the
+engine and champion bot to Swift. The contract between them is a set of files
+the app copies verbatim:
+
+- `testdata/vectors/*.json` — shared rules vectors (see its README)
+- `internal/bot/mldiscard-weights-v1.json`, `internal/bot/mlpeg-weights-v1.json` — bot weights
+- `internal/nn/testdata/parity_*.json` — neural-net forward-pass fixtures
+
+If you change scoring, game flow or the bot, regenerate the vectors
+(`go run ./cmd/vectors`) and commit them. Then, in the app repo, run
+`Scripts/sync-go.sh --update` and `swift test` to confirm the Swift engine
+still matches. Rules fixes land here first.
+
 ## Developing the bot
 
 One bot ships — the `champion`. To improve it, add a challenger in `internal/bot/lab`
