@@ -106,6 +106,10 @@ If you change scoring, game flow or the bot, regenerate the vectors
 `Scripts/sync-go.sh --update` and `swift test` to confirm the Swift engine
 still matches. Rules fixes land here first.
 
+What waits for a tap during a hand (Go, Next, the show, the deal) is specified
+once for both clients in [Play flow](design/play-flow.md). It is UI-layer only and
+does not touch the shared contract.
+
 ## Developing the bot
 
 One bot ships — the `champion`. To improve it, add a challenger in `internal/bot/lab`
