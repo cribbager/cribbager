@@ -33,7 +33,7 @@ step — edit anything under `web/public/src/` and just refresh.
 ## Documentation
 
 - **[Development](docs/development.md)** — running locally, the test suite, the CLI,
-  linting, and improving the bot.
+  linting, improving the bot, and keeping the iOS app aligned.
 - **[Self-hosting](deploy/macos/README.md)** — set up your own server on a Mac with your own
   domain.
 - **[Deployment](docs/deployment.md)** — Postgres persistence, password-reset email, and the
