@@ -38,7 +38,7 @@ pauses left to skip.
 | 0 | Cut for the deal (first hand of a game only) | The pack, then both cut cards and the verdict | **Start game** (shown once the reveal is done) | You | Tap the pack to cut. The staged reveal is animation only, and a second tap finishes it. *Start game* deals the first hand. |
 | 1 | Discarding | Your six cards. The bot's two are already in the crib, because it threw at the deal. | **Discard** (appears with your second choice) | You | Sends your two cards to the crib. The starter is cut in the same step, then pegging starts with no tap in between. |
 | 2 | Your turn, with a card that fits | Your hand, with unplayable cards dimmed | — | You | Tapping a legal card plays it. |
-| 3 | Your turn, with no card that fits (you still hold cards) | Your hand, all dimmed | **Go** | You | You say "Go", and the bot carries on at once. |
+| 3 | Your turn, with no card that fits (you still hold cards, and the bot has not already said go this count) | Your hand, all dimmed | **Go** | You | You say "Go", and the bot carries on at once. |
 | 4 | The bot's turn | The bot's card animates in | — | Bot | Nobody waits. |
 | 5 | A count has closed and the bot leads the next one | The closed count stays up: cards, "31" or the final count, and the last calls | **Next** | You | Clears the calls and resets the count to 0, and the bot leads at once. Cards already played stay on the table. |
 | 6 | A count has closed and you lead the next one | The same as 5, with your hand live | — | You | Playing your lead card is the acknowledgement. The count resets as your card lands. |
@@ -63,7 +63,7 @@ both engines already apply this rule.
 | Case | Resolution |
 |---|---|
 | The bot says go and you can still play | You don't tap. It is still your turn, and the bot's "Go" stays beside its cards. Keep playing. |
-| The bot says go, then you can't play either | The count closes with your last-card point. The bot leads next, so you get **Next**. If the bot has no cards left, you lead and there is no Next. |
+| The bot says go, then you can't play either | No Go button: only the first player out says go. The count closes with your last-card point. The bot leads next, so you get **Next**. If the bot has no cards left, you lead and there is no Next. |
 | You tap **Go** | The bot plays out at once (animated, with no taps between its cards) until the count closes. You always lead the next count, because you said go holding cards. That means no Next: your lead card is the acknowledgement. **A Go tap is never followed by a Next tap.** The only exception is the game ending (see below). |
 | You tap Go and the bot can't play either | The bot takes 1 for go immediately. You lead, so there is no Next. |
 | You have no cards left and the bot has several | There is no Go button, because go is only said while holding cards. The Go engine emits `pass` for an empty hand, and the client ignores it. The bot plays its cards out one animation after another, with no taps. If one of its cards makes 31 while it still holds more, the count closes and the bot leads again, so you get **Next**. |
