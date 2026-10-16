@@ -70,6 +70,7 @@ npm --prefix web install                         # first time only
 go run ./cmd/cribbager-server &
 SMOKE_URL=http://localhost:8080/ npm --prefix web run playthrough     # vs the bot
 SMOKE_URL=http://localhost:8080/ npm --prefix web run playthrough-mp  # human vs human
+SMOKE_URL=http://localhost:8080/ node web/scripts/smoke-mobile.mjs   # the /m/ tap-to-advance prototype (phone viewport)
 
 # Postgres integration tests (self-skip unless a database is reachable):
 docker compose up -d db
@@ -105,6 +106,10 @@ If you change scoring, game flow or the bot, regenerate the vectors
 (`go run ./cmd/vectors`) and commit them. Then, in the app repo, run
 `Scripts/sync-go.sh --update` and `swift test` to confirm the Swift engine
 still matches. Rules fixes land here first.
+
+What waits for a tap during a hand (Go, Next, the show, the deal) is specified
+once for both clients in [Play flow](design/play-flow.md). It is UI-layer only and
+does not touch the shared contract.
 
 ## Developing the bot
 
